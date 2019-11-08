@@ -10,21 +10,29 @@ import time
 class RobomasterEnv:
     def __init__(self):
         #Set up publishers for motion
-        self.pub_cmd_vel = rospy.Publisher('cmd_vel_acc', TwistAccel, queue_size=1)
-        self.cmd_vel_keyboard = TwistAccel();
-        self.pub_gimbal_angle = rospy.Publisher('cmd_gimbal_angle', GimbalAngle, queue_size=1)
-        self.cmd_gimbal_keyboard = GimbalAngle();
+        self.pub_cmd_vel = [rospy.Publisher('roborts_{0}/cmd_vel_acc'.format(i + 1), TwistAccel, queue_size=1) for i in range(4)]
+        self.cmd_vel = [TwistAccel() for i in range(4)]
+        self.pub_gimbal_angle = [rospy.Publisher('roborts_{0}/cmd_gimbal_angle'.format(i + 1), GimbalAngle, queue_size=1) for i in range(4)]
+        self.cmd_gimbal = [GimbalAngle() for i in range(4)]
         
         #Set up gazebo connection
         self.gazebo = GazeboConnection()
         self.gazebo.pauseSim()
 
         #Amount of time running per timestep
-        self.running_step = 0.1
+        self._running_step = 0.1
 
-        #Store number of timesteps
-        self.timestep = 0
-        self.max_timesteps = 1000 
+        #Max number of timesteps
+        self._timestep = 0
+        self._max_timesteps = 1000 
+
+        #Conversion from timestep to real time
+        self._real_time_conversion = 1
+
+        #Max and 
+
+    def _timestep_to_real_time(self):
+        return self._timestep * self._running_step * self._real_time_conversion 
 
     def step(self, action):
         #Unpause Simulation
@@ -33,26 +41,29 @@ class RobomasterEnv:
         #Set action parameters for publisher
         #self.cmd_vel_keyboard.twist.linear.x = 1
         #self.cmd_vel_keyboard.twist.linear.y = 1
-        self.cmd_vel_keyboard.twist.angular.z = -1
+        self.cmd_vel[0].twist.angular.z = -1
         
-        #publish actions and execute for running_step time
-        self.pub_cmd_vel.publish(self.cmd_vel_keyboard)
-        self.pub_gimbal_angle.publish(self.cmd_gimbal_keyboard)
-        time.sleep(self.running_step) 
+        #Publish actions and execute for running_step time
+        for i in range(4):
+            self.pub_cmd_vel[i].publish(self.cmd_vel[i])
+            self.pub_gimbal_angle[i].publish(self.cmd_gimbal[i])
+
+        time.sleep(self._running_step) 
         
-        #pause Simulation
+        #Pause simulation
         self.gazebo.pauseSim()
 
         #calculate state and reward
         state = self.get_state()
         reward = self.get_reward(state, action)
-        done = self.timestep >= self.max_timesteps
+        done = self._timestep >= self._max_timesteps
 
         return state, reward, done, {}
        
 
     def reset(self):
-        self.timestep = 0
+        self._timestep = 0
+        self.real_time = 0
         self.gazebo.pauseSim()
         self.gazebo.resetSim()
         # EXTRA: Reset JoinStateControlers because sim reset doesnt reset TFs, generating time problems
@@ -65,6 +76,11 @@ class RobomasterEnv:
         return state
 
     def get_state(self):
+        #xyz position, robot angle, gimbal angle, number of projectiles, temperature of shooter, real time?
+
+        #xyz: roborts_x/pose/position
+        #robot angle: roborts_x/pose/orientation
+        #
         return -1
 
     def get_reward(self, state, action):
