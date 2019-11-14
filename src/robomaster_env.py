@@ -10,6 +10,7 @@ from gazebo_connection import GazeboConnection
 import math
 import time
 
+from utils import *
 
 class RobomasterEnv:
     def __init__(self):
@@ -48,23 +49,31 @@ class RobomasterEnv:
 
         #Gives coordinates for the obstacles:
         #x-start, x-end, y-start, y-end
-        #4 lines per obstacle
-        parallel_obstacles = [
-        [1.500, 1.750, 0, 0], [1.500, 1.750, 1.000, 1.000], [1.500, 1.500, 0, 1.000], [1.750, 1.750, 0, 1.000],
-        [3.600, 4.600, 1.000, 1.000], [3.600, 4.600, 1.250, 1.250], [3.600, 3.600, 1.000, 1.250], [4.600, 4.600, 1.000, 1.250],
-        [7.100, 8.100, 1.000, 1.000], [7.100, 8.100, 1.250, 1.250], [7.100, 7.100, 1.000, 1.250], [8.100, 8.100, 1.000, 1.250],
-        [1.500, 2.300, 2.425, 2.425], [1.500, 2.300, 2.675, 2.675], [1.500, 1.500, 2.425, 2.675], [2.300, 2.300, 2.425, 2.675],
-        [5.800, 6.600, 2.425, 2.425], [5.800, 6.600, 2.675, 2.675], [5.800, 5.800, 2.425, 2.675], [6.600, 6.600, 2.425, 2.675],
-        [0.000, 1.000, 3.850, 3.850], [0.000, 1.000, 4.100, 4.100], [0.000, 0.000, 3.850, 4.100], [1.000, 1.000, 4.100, 4.100],
-        [3.500, 4.500, 3.850, 3.850], [3.500, 4.500, 4.100, 4.100], [3.500, 3.500, 3.850, 4.100], [4.500, 4.500, 3.850, 4.100],
-        [6.350, 6.600, 4.100, 4.100], [6.350, 6.600, 5.100, 5.100], [6.350, 6.350, 4.100, 5.100], [6.600, 6.600, 4.100, 5.100]]
-        #points [x_1, y_1, x_2, y_2]
-        center_obstacle = [[3600-300 / math.sqrt(2), 2550, 3600, 2550 + 300 / math.sqrt(2)],
-            [3600-300 / math.sqrt(2), 2550, 3600, 2550 - 300 / math.sqrt(2)],
-            [3600, 2550 + 300 / math.sqrt(2), 3600 + 300/ math.sqrt(2), 2550],
-            [3600, 2550 - 300 / math.sqrt(2), 3600 + 300/ math.sqrt(2), 2550]]
+        self.parallel_obstacles = [
+            (1.500, 1.750, 0, 1.000),
+            (3.600, 4.600, 1.000, 1.250),
+            (7.100, 8.100, 1.000, 1.250),
+            (1.500, 2.300, 2.425, 2.675),
+            (5.800, 6.600, 2.425, 2.675),
+            (0.000, 1.000, 3.850, 4.100),
+            (3.500, 4.500, 3.850, 4.100),
+            (6.350, 6.600, 4.100, 5.100),
+        ]
+        #points [top, middle, end, left, middle, right]
+        diagonal_len = 300 / math.sqrt(2)
+        self.center_obstacle = (3600 - diagonal_len, 3600, 3600 + diagonal_len, 2550 - diagonal_len, 2550, 2550 + diagonal_len)
+        
+        # initialize segments of each obstacle for blocking calculation
+        # buffer is added
+        segments = []
+        buffer = 0.015
+        for xl, xr, yb, yt in self.parallel_obstacles:
+            xr, xr, yb, yt = xr - buffer, xr + buffer, yb - buffer, yt + buffer
+            segments.extend([(xl, yb, xl, yt), (xl, yb, xr, yb), (xr, yt, xr, yb), (xr, yt, xl, yt)])
+        top, hmid, bot, left, vmid, right = self.center_obstacle
+        segments.extend([(left - buffer, hmid, right + buffer, hmid), (vmid, bot - buffer, vmid, top + buffer)])
+        self.segments = segments
 
-        #These are the coordinates of the debuff zone:
         self._zones = [
         [3.830, 4.370, 0.270, 0.750],
         [1.630, 2.170, 1.695, 2.175],
@@ -262,7 +271,7 @@ class RobomasterEnv:
         #barrel heat: 1 
         #robot hp: 1
 
-        robot_state = [list(self._odom_info[i]) + list(self._gimbal_angle_info[i]) + self._num_projectiles[i] + self._barrel_heat[i] + self._robot_hp[i] for i in range(4)]
+        robot_state = [list(self._odom_info[i]) + self._num_projectiles[i] + self._barrel_heat[i] + self._robot_hp[i] for i in range(4)]
         return [robot_state[0] + robot_state[1] + robot_state[2] + robot_state[3], robot_state[0] + robot_state[1] + robot_state[2] + robot_state[3]]
 
     def get_reward(self, state, action1, action2):
