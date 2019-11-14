@@ -92,24 +92,16 @@ class RobomasterEnv:
         self.cmd_vel[0].twist.linear.x = action1[0]
         self.cmd_vel[0].twist.linear.y = action1[1]
         self.cmd_vel[0].twist.angular.z = action1[2]
-        self.cmd_gimbal[0].pitch_angle = action1[3]
-        self.cmd_gimbal[0].yaw_angle = action1[4]
         self.cmd_vel[1].twist.linear.x = action1[5]
         self.cmd_vel[1].twist.linear.y = action1[6]
         self.cmd_vel[1].twist.angular.z = action1[7]
-        self.cmd_gimbal[1].pitch_angle = action1[8]
-        self.cmd_gimbal[1].yaw_angle = action1[9]
 
         self.cmd_vel[2].twist.linear.x = action2[0]
         self.cmd_vel[2].twist.linear.y = action2[1]
         self.cmd_vel[2].twist.angular.z = action2[2]
-        self.cmd_gimbal[2].pitch_angle = action2[3]
-        self.cmd_gimbal[2].yaw_angle = action2[4]
         self.cmd_vel[3].twist.linear.x = action2[5]
         self.cmd_vel[3].twist.linear.y = action2[6]
         self.cmd_vel[3].twist.angular.z = action2[7]
-        self.cmd_gimbal[3].pitch_angle = action2[8]
-        self.cmd_gimbal[3].yaw_angle = action2[9]
 
         #Publish actions and execute for running_step time
         for i in range(4):
