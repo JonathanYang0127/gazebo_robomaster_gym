@@ -47,6 +47,26 @@ class RobomasterEnv:
         #Conversion from timestep to real time
         self._real_time_conversion = 1
 
+        def diag_stats_helper(l, w):
+            angle = math.atan(w / l)
+            return angle, w / math.sin(angle) / 2
+
+        #Robot size
+        self.robot_length, self.robot_width = 0.550, 0.420
+        self.robot_diag_angle, self.robot_diag_length = diag_stats_helper(self.robot_length, self.robot_width)
+
+        #Armor size and some calculation constants
+        self.armor_size = 0.131
+        self.armor_thickness = 0.015
+        self.forward_frame_length = self.robot_length + self.armor_thickness * 2
+        self.forward_frame_diag_angle, self.forward_frame_diag_length = diag_stats_helper(self.forward_frame_length, self.armor_size)
+        
+        self.sideway_frame_width = self.robot_width + self.armor_thickness * 2
+        self.sideway_frame_diag_angle, self.sideway_frame_diag_length = diag_stats_helper(self.armor_size, self.sideway_frame_width)
+
+        #Conversion from timestep to real time
+        self._real_time_conversion = 1
+
         #Gives coordinates for the obstacles:
         #x-start, x-end, y-start, y-end
         self.parallel_obstacles = [
@@ -108,6 +128,73 @@ class RobomasterEnv:
         Z = math.atan2(t3, t4)
 
         return X, Y, Z 
+
+    def check_collision_with_obstacle(robot1, robot2):
+        pass
+
+    def robot_coords_from_odom(self, odom_info):
+        x, y, z, yaw = odom_info
+        coords = []
+        for angle in (yaw + self.robot_diag_angle, yaw + math.pi - self.robot_diag_angle, yaw + math.pi + self.robot_diag_angle, yaw - self.robot_diag_angle):
+            xoff, yoff = math.cos(angle) * self.robot_diag_length, math.sin(angle) * self.robot_diag_length
+            coords.extend([x + xoff, y + yoff])
+        return coords
+
+    def get_enemy_team(self, robot_index):
+        if robot_index < 2:
+            return (2, 3)
+        return (0, 1)
+
+    def plate_coords_from_odom(self, odom_info):
+        x, y, z, yaw = odom_info
+        frontx1off, fronty1off = math.cos(yaw + self.forward_frame_diag_angle) * self.forward_frame_diag_length, math.sin(yaw + self.forward_frame_diag_angle) * self.forward_frame_diag_length
+        frontx2off, fronty2off = math.cos(yaw - self.forward_frame_diag_angle) * self.forward_frame_diag_length, math.sin(yaw - self.forward_frame_diag_angle) * self.forward_frame_diag_length
+        backx1off, backy1off = math.cos(yaw + math.pi + self.forward_frame_diag_angle) * self.forward_frame_diag_length, math.sin(yaw + math.pi + self.forward_frame_diag_angle) * self.forward_frame_diag_length
+        backx2off, backy2off = math.cos(yaw + math.pi - self.forward_frame_diag_angle) * self.forward_frame_diag_length, math.sin(yaw + math.pi - self.forward_frame_diag_angle) * self.forward_frame_diag_length
+        leftx1off, lefty1off = math.cos(yaw + self.sideway_frame_diag_angle) * self.sideway_frame_diag_length, math.sin(yaw + math.pi - self.sideway_frame_diag_angle) * self.sideway_frame_diag_length
+        rightx2off, righty2off  = math.cos(yaw - self.sideway_frame_diag_angle) * self.sideway_frame_diag_length, math.sin(yaw - self.sideway_frame_diag_angle) * self.sideway_frame_diag_length
+        rightx1off, righty1off = math.cos(yaw + math.pi + self.sideway_frame_diag_angle) * self.sideway_frame_diag_length, math.sin(yaw + math.pi + self.sideway_frame_diag_angle) * self.sideway_frame_diag_length
+        leftx2off, lefty2off = math.cos(yaw + math.pi - self.sideway_frame_diag_angle) * self.sideway_frame_diag_length, math.sin(yaw + math.pi - self.sideway_frame_diag_angle) * self.sideway_frame_diag_length
+        return [(x + frontx1off, y + fronty1off, x + frontx2off, y + fronty2off),
+                (x + leftx1off, y + lefty1off, x + leftx2off, y + lefty2off),
+                (x + rightx1off, y + righty1off, x + rightx2off, y + righty2off),
+                (x + backx1off, y + backy1off, x + backx2off, y + backy2off)]
+
+    def update_robot_coords(self):
+        self.robot_coords = [self.robot_coords_from_odom(self.odom_info[0]), self.robot_coords_from_odom(self.odom_info[1]), \
+            self.robot_coords_from_odom(self.odom_info[2]), self.robot_coords_from_odom(self.odom_info[3])]
+        self.robot_plates_coords = [self.plate_coords_from_odom(self.odom_info[0]), self.plate_coords_from_odom(self.odom_info[1]), \
+            self.plate_coords_from_odom(self.odom_info[2]), self.plate_coords_from_odom(self.odom_info[3])]
+
+    # pass in from_robot_index so it doesn't check for the robot itself!
+    # otherwise, each robot blocks its own line-of-sight
+    def is_line_of_sight_blocked(self, x1, y1, x2, y2, from_robot_index=None):
+        # uninitiated
+        if not self.robot_coords:
+            return False
+        for robot_index in range(4):
+            if robot_index != from_robot_index:
+                _x1, _y1, _x2, _y2, _x3, _y3, _x4, _y4 = self.robot_coords[robot_index]
+                if lines_cross(x1, y1, x2, y2, _x1, _y1, _x3, _y3) or lines_cross(x1, y1, x2, y2, _x2, _y2, _x4, _y4):
+                    return True
+        for xl, yl, xh, yh in self.segments:
+            if lines_cross(x1, y1, x2, y2, xl, yl, xh, yh):
+                return True
+        return False
+
+    def get_visible_enemy_plates(self, robot_index):
+        enemy1, enemy2 = self.get_enemy_team(robot_index)
+        visible = []
+        x, y, _, __ = self.odom_info[robot_index]
+        for index in range(4):
+            x1, y1, x2, y2 = self.robot_plates_coords[enemy1][index]
+            if not self.is_line_of_sight_blocked(x, y, x1, y1, robot_index) and not self.is_line_of_sight_blocked(x, y, x2, y2, robot_index):
+                visible.extend([(enemy1, index)])
+        for index in range(4):
+            x1, y1, x2, y2 = self.robot_plates_coords[enemy2][index]
+            if not self.is_line_of_sight_blocked(x, y, x1, y1, robot_index) and not self.is_line_of_sight_blocked(x, y, x2, y2, robot_index):
+                visible.extend([(enemy2, index)])
+        return visible
 
     def odometry_callback(self, msg):
         #print(self._odom_info)
