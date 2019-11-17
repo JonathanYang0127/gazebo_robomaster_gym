@@ -51,11 +51,13 @@ class RobomasterEnv:
             angle = math.atan(w / l)
             return angle, w / math.sin(angle) / 2
 
-        #Robot size
+        self.robot_coords = [None] * 4
+        self.robot_plates_coords = [None] * 4
+
+        #Robot parameters
         self.robot_length, self.robot_width = 0.550, 0.420
         self.robot_diag_angle, self.robot_diag_length = diag_stats_helper(self.robot_length, self.robot_width)
 
-        #Armor size and some calculation constants
         self.armor_size = 0.131
         self.armor_thickness = 0.015
         self.forward_frame_length = self.robot_length + self.armor_thickness * 2
@@ -63,6 +65,11 @@ class RobomasterEnv:
         
         self.sideway_frame_width = self.robot_width + self.armor_thickness * 2
         self.sideway_frame_diag_angle, self.sideway_frame_diag_length = diag_stats_helper(self.armor_size, self.sideway_frame_width)
+
+        self.gimbal_angle_range = 82.5 / 180 * math.pi
+
+        # more on this later
+        self.gimbal_shoot_range = float('inf')
 
         #Conversion from timestep to real time
         self._real_time_conversion = 1
@@ -81,7 +88,7 @@ class RobomasterEnv:
         ]
         #points [top, middle, end, left, middle, right]
         diagonal_len = 300 / math.sqrt(2)
-        self.center_obstacle = (3600 - diagonal_len, 3600, 3600 + diagonal_len, 2550 - diagonal_len, 2550, 2550 + diagonal_len)
+        self.center_obstacle = (4.050 - diagonal_len, 4.050, 4.050 + diagonal_len, 2.550 - diagonal_len, 2.550, 2.550 + diagonal_len)
         
         # initialize segments of each obstacle for blocking calculation
         # buffer is added
@@ -93,6 +100,8 @@ class RobomasterEnv:
         top, hmid, bot, left, vmid, right = self.center_obstacle
         segments.extend([(left - buffer, hmid, right + buffer, hmid), (vmid, bot - buffer, vmid, top + buffer)])
         self.segments = segments
+
+        self.armor_plate_damage = [20, 40, 40, 60]
 
         self._zones = [
         [3.830, 4.370, 0.270, 0.750],
@@ -161,17 +170,17 @@ class RobomasterEnv:
                 (x + backx1off, y + backy1off, x + backx2off, y + backy2off)]
 
     def update_robot_coords(self):
-        self.robot_coords = [self.robot_coords_from_odom(self.odom_info[0]), self.robot_coords_from_odom(self.odom_info[1]), \
-            self.robot_coords_from_odom(self.odom_info[2]), self.robot_coords_from_odom(self.odom_info[3])]
-        self.robot_plates_coords = [self.plate_coords_from_odom(self.odom_info[0]), self.plate_coords_from_odom(self.odom_info[1]), \
-            self.plate_coords_from_odom(self.odom_info[2]), self.plate_coords_from_odom(self.odom_info[3])]
+        self.robot_coords = [self.robot_coords_from_odom(self._odom_info[0]), self.robot_coords_from_odom(self._odom_info[1]), \
+            self.robot_coords_from_odom(self._odom_info[2]), self.robot_coords_from_odom(self._odom_info[3])]
+        self.robot_plates_coords = [self.plate_coords_from_odom(self._odom_info[0]), self.plate_coords_from_odom(self._odom_info[1]), \
+            self.plate_coords_from_odom(self._odom_info[2]), self.plate_coords_from_odom(self._odom_info[3])]
 
     # pass in from_robot_index so it doesn't check for the robot itself!
     # otherwise, each robot blocks its own line-of-sight
     def is_line_of_sight_blocked(self, x1, y1, x2, y2, from_robot_index=None):
         # uninitiated
         if not self.robot_coords:
-            return False
+            return True
         for robot_index in range(4):
             if robot_index != from_robot_index:
                 _x1, _y1, _x2, _y2, _x3, _y3, _x4, _y4 = self.robot_coords[robot_index]
@@ -185,20 +194,23 @@ class RobomasterEnv:
     def get_visible_enemy_plates(self, robot_index):
         enemy1, enemy2 = self.get_enemy_team(robot_index)
         visible = []
-        x, y, _, __ = self.odom_info[robot_index]
+        x, y, z, yaw = self._odom_info[robot_index]
         for index in range(4):
             x1, y1, x2, y2 = self.robot_plates_coords[enemy1][index]
-            if not self.is_line_of_sight_blocked(x, y, x1, y1, robot_index) and not self.is_line_of_sight_blocked(x, y, x2, y2, robot_index):
-                visible.extend([(enemy1, index)])
+            if distance(x, y, x1, y1) < self.gimbal_shoot_range and distance(x, y, x2, y2) < self.gimbal_shoot_range and angleDiff(angleTo(x, y, x1, y1), yaw) <= self.gimbal_angle_range and angleDiff(angleTo(x, y, x2, y2), yaw) <= self.gimbal_angle_range:
+                if not self.is_line_of_sight_blocked(x, y, x1, y1, robot_index) and not self.is_line_of_sight_blocked(x, y, x2, y2, robot_index):
+                    visible.extend([(enemy1, self.armor_plate_damage[index], angleBetween(x, y, x1, y1, x2, y2))])
         for index in range(4):
             x1, y1, x2, y2 = self.robot_plates_coords[enemy2][index]
-            if not self.is_line_of_sight_blocked(x, y, x1, y1, robot_index) and not self.is_line_of_sight_blocked(x, y, x2, y2, robot_index):
-                visible.extend([(enemy2, index)])
+            if distance(x, y, x1, y1) < self.gimbal_shoot_range and distance(x, y, x2, y2) < self.gimbal_shoot_range and angleDiff(angleTo(x, y, x1, y1), yaw) <= self.gimbal_angle_range and angleDiff(angleTo(x, y, x2, y2), yaw) <= self.gimbal_angle_range:
+                if not self.is_line_of_sight_blocked(x, y, x1, y1, robot_index) and not self.is_line_of_sight_blocked(x, y, x2, y2, robot_index):
+                    visible.extend([(enemy2, self.armor_plate_damage[index], angleBetween(x, y, x1, y1, x2, y2))])
         return visible
 
     def odometry_callback(self, msg):
         #print(self._odom_info)
         self._odom_info[int(msg._connection_header['topic'][9]) - 1] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, self.quaternion_to_euler(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)[2]]
+        self.update_robot_coords()
 
     def gimbal_angle_callback(self, msg):
         self._gimbal_angle_info[int(msg._connection_header['topic'][9]) - 1] = msg.position 
