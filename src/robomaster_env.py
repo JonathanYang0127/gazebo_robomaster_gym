@@ -30,24 +30,7 @@ class RobomasterEnv:
         self._launch_velocity_max = 25
         self._shoot = [0, 0, 0, 0]
 
-        #Set up subscribers for state
-        self.sub_odom = [rospy.Subscriber('roborts_{0}/ground_truth/state'.format(i+1), Odometry, self.odometry_callback) for i in range(4)]
-        self.sub_gimbal_angle = [rospy.Subscriber('roborts_{0}/joint_states'.format(i+1), JointState, self.gimbal_angle_callback) for i in range(4)]
- 
-        #Set up gazebo connection
-        self.gazebo = GazeboConnection()
-        self.gazebo.pauseSim()
-
-        #Amount of time running per timestep
-        self._running_step = 0.1
-
-        #Max number of timesteps
-        self._timestep = 0
-        self._max_timesteps = 1000 
-
-        #Conversion from timestep to real time
-        self._real_time_conversion = 1
-
+        #Robot constants
         def diag_stats_helper(l, w):
             angle = math.atan(w / l)
             return angle, w / math.sin(angle) / 2
@@ -71,6 +54,16 @@ class RobomasterEnv:
 
         # more on this later
         self.gimbal_shoot_range = float('inf')
+        #Set up subscribers for state
+        self.sub_odom = [rospy.Subscriber('roborts_{0}/ground_truth/state'.format(i+1), Odometry, self.odometry_callback) for i in range(4)]
+        self.sub_gimbal_angle = [rospy.Subscriber('roborts_{0}/joint_states'.format(i+1), JointState, self.gimbal_angle_callback) for i in range(4)]
+
+        #Amount of time running per timestep
+        self._running_step = 0.1
+
+        #Max number of timesteps
+        self._timestep = 0
+        self._max_timesteps = 1000 
 
         #Conversion from timestep to real time
         self._real_time_conversion = 1
@@ -123,6 +116,10 @@ class RobomasterEnv:
         #Effects per robot
         self._robot_effects = [dict(), dict(), dict(), dict()]
 
+        #Set up gazebo connection
+        self.gazebo = GazeboConnection()
+        self.gazebo.pauseSim()
+
     def quaternion_to_euler(self, x, y, z, w):
         t0 = +2.0 * (w * x + y * z)
         t1 = +1.0 - 2.0 * (x * x + y * y)
@@ -170,11 +167,9 @@ class RobomasterEnv:
                 (x + rightx1off, y + righty1off, x + rightx2off, y + righty2off),
                 (x + backx1off, y + backy1off, x + backx2off, y + backy2off)]
 
-    def update_robot_coords(self):
-        self.robot_coords = [self.robot_coords_from_odom(self._odom_info[0]), self.robot_coords_from_odom(self._odom_info[1]), \
-            self.robot_coords_from_odom(self._odom_info[2]), self.robot_coords_from_odom(self._odom_info[3])]
-        self.robot_plates_coords = [self.plate_coords_from_odom(self._odom_info[0]), self.plate_coords_from_odom(self._odom_info[1]), \
-            self.plate_coords_from_odom(self._odom_info[2]), self.plate_coords_from_odom(self._odom_info[3])]
+    def update_robot_coords(self, _id):
+        self.robot_coords[_id] = self.robot_coords_from_odom(self._odom_info[_id])
+        self.robot_plates_coords[_id] = self.plate_coords_from_odom(self._odom_info[_id])
 
     # pass in from_robot_index so it doesn't check for the robot itself!
     # otherwise, each robot blocks its own line-of-sight
@@ -209,9 +204,9 @@ class RobomasterEnv:
         return visible
 
     def odometry_callback(self, msg):
-        #print(self._odom_info)
-        self._odom_info[int(msg._connection_header['topic'][9]) - 1] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, self.quaternion_to_euler(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)[2]]
-        self.update_robot_coords()
+        _id = int(msg._connection_header['topic'][9]) - 1
+        self._odom_info[_id] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, self.quaternion_to_euler(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)[2]]
+        self.update_robot_coords(_id)
 
     def gimbal_angle_callback(self, msg):
         self._gimbal_angle_info[int(msg._connection_header['topic'][9]) - 1] = msg.position 
