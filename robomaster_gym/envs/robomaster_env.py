@@ -1,26 +1,20 @@
-#! /usr/bin/env python
 import rospy
+import gym
 
 from roborts_msgs.msg import TwistAccel, GimbalAngle
 from std_msgs.msg import Empty
 from keyboard.msg import Key
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
-from gazebo_connection import GazeboConnection
+from robomaster_gym.misc.gazebo_connection import GazeboConnection
 import math
 import time
 import pygame
 
-from utils import *
+from robomaster_gym.misc.utils import *
 
-class RobomasterEnv:
+class RobomasterEnv(gym.Env):
     def __init__(self, statistics_gui=False):
-        #Set up publishers for motion
-        self.pub_cmd_vel = [rospy.Publisher('roborts_{0}/cmd_vel_acc'.format(i + 1), TwistAccel, queue_size=1) for i in range(4)]
-        self.cmd_vel = [TwistAccel() for i in range(4)]
-        self.pub_gimbal_angle = [rospy.Publisher('roborts_{0}/cmd_gimbal_angle'.format(i + 1), GimbalAngle, queue_size=1) for i in range(4)]
-        self.cmd_gimbal = [GimbalAngle() for i in range(4)]
-
         #Set up state parameters
         self._odom_info = [[None]] * 4 
         self._gimbal_angle_info = [[None]] * 4
@@ -54,9 +48,7 @@ class RobomasterEnv:
 
         # more on this later
         self.gimbal_shoot_range = float('inf')
-        #Set up subscribers for state
-        self.sub_odom = [rospy.Subscriber('roborts_{0}/ground_truth/state'.format(i+1), Odometry, self.odometry_callback) for i in range(4)]
-        self.sub_gimbal_angle = [rospy.Subscriber('roborts_{0}/joint_states'.format(i+1), JointState, self.gimbal_angle_callback) for i in range(4)]
+        
 
         #Amount of time running per timestep
         self._running_step = 0.1
@@ -372,12 +364,26 @@ class RobomasterEnv:
     def get_reward(self, state, action1, action2):
         return 0
 
+    def _start_rospy(self):
+        #Bring up node
+        rospy.init_node('gym_env_node') 
+
+        #Set up publishers for motion
+        self.pub_cmd_vel = [rospy.Publisher('roborts_{0}/cmd_vel_acc'.format(i + 1), TwistAccel, queue_size=1) for i in range(4)]
+        self.cmd_vel = [TwistAccel() for i in range(4)]
+        self.pub_gimbal_angle = [rospy.Publisher('roborts_{0}/cmd_gimbal_angle'.format(i + 1), GimbalAngle, queue_size=1) for i in range(4)]
+        self.cmd_gimbal = [GimbalAngle() for i in range(4)]
+
+        #Set up subscribers for state
+        self.sub_odom = [rospy.Subscriber('roborts_{0}/ground_truth/state'.format(i+1), Odometry, self.odometry_callback) for i in range(4)]
+        self.sub_gimbal_angle = [rospy.Subscriber('roborts_{0}/joint_states'.format(i+1), JointState, self.gimbal_angle_callback) for i in range(4)]
+        return self
+        
+
 if __name__ == '__main__': 
-    rospy.init_node('gym_env_node') 
-    env = RobomasterEnv()
+    env = RobomasterEnv()._start_rospy()
     for i in range(1000):
         state, reward, done, info = env.step([0, 1, 0, 0, 0, 0, -1, 0], [0, 0, -1, 0, 0, 0, 1, 0])
         time.sleep(0.01)
         if done:
             env.reset()
-    rospy.spin()
