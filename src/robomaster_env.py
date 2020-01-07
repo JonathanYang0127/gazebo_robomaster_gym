@@ -9,11 +9,12 @@ from sensor_msgs.msg import JointState
 from gazebo_connection import GazeboConnection
 import math
 import time
+import pygame
 
 from utils import *
 
 class RobomasterEnv:
-    def __init__(self):
+    def __init__(self, statistics_gui=False):
         #Set up publishers for motion
         self.pub_cmd_vel = [rospy.Publisher('roborts_{0}/cmd_vel_acc'.format(i + 1), TwistAccel, queue_size=1) for i in range(4)]
         self.cmd_vel = [TwistAccel() for i in range(4)]
@@ -376,8 +377,8 @@ class RobomasterEnv:
     def get_reward(self, state, action1, action2):
         return 0
 
-if __name__ == '__main__':  
-    rospy.init_node('gym_env_node')
+if __name__ == '__main__': 
+    rospy.init_node('gym_env_node') 
     env = RobomasterEnv()
     for i in range(1000):
         state, reward, done, info = env.step([0, 1, 0, 0, 0, 0, -1, 0], [0, 0, -1, 0, 0, 0, 1, 0])
