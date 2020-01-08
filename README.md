@@ -30,7 +30,7 @@ env = gym.make('robomaster-env-v0')._start_rospy()
 ```
 
 ## Files
-There are currently 3 main directories in this package.  
-robomaster_gym contains the gym environments  
-scripts contains algorithms to test and run reinforcement learning on the environment  
-strategies contains a few baseline strategies without rl
+There are currently 3 main directories in this package: 
+1. robomaster_gym contains the gym environments  
+2. scripts contains algorithms to test and run reinforcement learning on the environment  
+3. strategies contains a few baseline strategies without rl
