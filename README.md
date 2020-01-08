@@ -1,4 +1,4 @@
-# gazebo_robomaster_gym
+# Gazebo Robomaster Gym
 This is a gym wrapper for the gazebo simulation of the ICRA Robomaster challenge made by the decision making team of Bear Dynamics.
 
 ## How to Use:
