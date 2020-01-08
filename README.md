@@ -1,5 +1,5 @@
 # Gazebo Robomaster Gym
-This is a gym wrapper for the gazebo simulation of the ICRA Robomaster challenge made by the decision making team of Bear Dynamics.
+This is a gym wrapper for the gazebo simulation of the ICRA Robomaster AI Challenge made by the decision making team of Bear Dynamics.
 
 ## How to Use:
 Clone the gazebo simulation from here: https://github.com/alexzhou0/RoboRTS-Berkeley-Perception. Clone this repository in ros_ws/src. 
