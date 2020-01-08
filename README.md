@@ -2,7 +2,7 @@
 This is a gym wrapper for the gazebo simulation of the ICRA Robomaster AI Challenge made by the decision making team of Bear Dynamics.
 
 ## How to Use:
-Clone the gazebo simulation from here: https://github.com/alexzhou0/RoboRTS-Berkeley-Perception. Clone this repository in ros_ws/src. 
+Clone the gazebo simulation from here: https://github.com/alexzhou0/RoboRTS-Berkeley-Perception and checkout the melodic-devel branch. Clone this repository into ros_ws/src. 
 Compile the ros workspace using catkin_make and source the setup file:
 
 ```bash
