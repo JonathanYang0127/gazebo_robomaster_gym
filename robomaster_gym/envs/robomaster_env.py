@@ -73,7 +73,7 @@ class RobomasterEnv(gym.Env):
             (6.350, 6.600, 4.100, 5.100),
         ]
         #points [top, middle, end, left, middle, right]
-        diagonal_len = 300 / math.sqrt(2)
+        diagonal_len = .300 / math.sqrt(2)
         self.center_obstacle = (4.050 - diagonal_len, 4.050, 4.050 + diagonal_len, 2.550 - diagonal_len, 2.550, 2.550 + diagonal_len)
         
         # initialize segments of each obstacle for blocking calculation
@@ -83,8 +83,9 @@ class RobomasterEnv(gym.Env):
         for xl, xr, yb, yt in self.parallel_obstacles:
             xr, xr, yb, yt = xr - buffer, xr + buffer, yb - buffer, yt + buffer
             segments.extend([(xl, yb, xl, yt), (xl, yb, xr, yb), (xr, yt, xr, yb), (xr, yt, xl, yt)])
-        top, hmid, bot, left, vmid, right = self.center_obstacle
-        segments.extend([(left - buffer, hmid, right + buffer, hmid), (vmid, bot - buffer, vmid, top + buffer)])
+        left, hmid, right, bot, vmid, top = self.center_obstacle
+        left, right, bot, top = left - buffer, right + buffer, bot - buffer, top + buffer
+        segments.extend([(left, vmid, hmid, top), (hmid, top, right, vmid), (right, vmid, hmid, bot), (hmid, bot, left, vmid)])
         self.segments = segments
 
         self.armor_plate_damage = [20, 40, 40, 60]

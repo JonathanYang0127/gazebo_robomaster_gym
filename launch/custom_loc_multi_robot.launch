@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Adapted from Rethink Robotics baxter_world.launch -->
+<launch>
+
+	<!-- Arguments that can be passed to the launch file. eg paused:=true -->
+	<arg name="paused" default="false"/>
+	<arg name="use_sim_time" default="true"/>
+	<arg name="gui" default="true"/>
+	<arg name="headless" default="false"/>
+	<arg name="debug" default="false"/>
+
+    <arg name="x1" default="0.6"/>
+	<arg name="y1" default="1"/>
+
+    <arg name="x2" default="0.6"/>
+	<arg name="y2" default="4.5"/>
+	<arg name="Y2" default="4.71"/>
+
+    <arg name="x3" value="7.5"/>
+    <arg name="y3" value="4"/>
+    <arg name="Y3" value="3.14"/>
+
+    <arg name="x4" value="7.3"/>
+    <arg name="y4" value="0.4"/>
+    <arg name="Y4" value="1.57"/>
+
+	<!-- Use empty_world.launch-->
+	<include file="$(find gazebo_ros)/launch/empty_world.launch">
+		<arg name="world_name" value="$(find roborts_sim)/worlds/roborts.world"/>
+		<arg name="debug" value="$(arg debug)"/>
+		<arg name="gui" value="$(arg gui)"/>
+		<arg name="paused" value="$(arg paused)"/>
+		<arg name="use_sim_time" value="$(arg use_sim_time)"/>
+		<arg name="headless" value="$(arg headless)"/>
+		<arg name="verbose" value="false"/>
+	</include>
+
+	<group ns="roborts_1">
+		<param name="tf_prefix" value="roborts_1_tf"/>
+		<include file="$(find roborts_sim)/launch/spawn_robot.launch">
+			<arg name="x" value="$(arg x1)"/>
+			<arg name="y" value="$(arg y1)"/>
+			<arg name="robot_name" value="roborts_1"/>
+			<arg name="model" value="$(find roborts_sim)/urdf/roborts.urdf"/>
+		</include>
+	</group>
+
+	<group ns="roborts_2">
+		<param name="tf_prefix" value="roborts_2_tf"/>
+		<include file="$(find roborts_sim)/launch/spawn_robot.launch">
+			<arg name="x" value="$(arg x2)"/>
+			<arg name="y" value="$(arg y2)"/>
+			<arg name="Y" value="$(arg Y2)"/>
+			<arg name="robot_name" value="roborts_2"/>
+		</include>
+	</group>
+
+    <group ns="roborts_3">
+		<param name="tf_prefix" value="roborts_3_tf"/>
+		<include file="$(find roborts_sim)/launch/spawn_robot.launch">
+			<arg name="x" value="$(arg x3)"/>
+			<arg name="y" value="$(arg y3)"/>
+			<arg name="Y" value="$(arg Y3)"/>
+			<arg name="robot_name" value="roborts_3"/>
+		</include>
+	</group>
+
+    <group ns="roborts_4">
+		<param name="tf_prefix" value="roborts_4_tf"/>
+		<include file="$(find roborts_sim)/launch/spawn_robot.launch">
+			<arg name="x" value="$(arg x4)"/>
+			<arg name="y" value="$(arg y4)"/>
+			<arg name="Y" value="$(arg Y4)"/>
+			<arg name="robot_name" value="roborts_4"/>
+		</include>
+	</group>
+
+</launch>
