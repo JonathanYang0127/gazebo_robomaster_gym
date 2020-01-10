@@ -37,11 +37,12 @@ class CloseQuarter(RobomasterEnv):
         cli_args1 = ['gazebo_robomaster_gym','custom_loc_multi_robot.launch',\
             'x2:=%d'.format(init_pose[0]),'y2:=%d'.format(init_pose[1]),'Y2:=%d'.format(init_pose[2]),\
             'x3:=%d'.format(init_pose[3]),'y3:=%d'.format(init_pose[4]),'Y3:=%d'.format(init_pose[5]),]
-        cli_args2 = ['roborts_bringup','roborts_gazebo.launch']
+        cli_args2 = ['roborts_bringup','roborts_gazebo.launch','gui:=true']
         roslaunch_file1 = roslaunch.rlutil.resolve_launch_arguments(cli_args1)
         roslaunch_args1 = cli_args1[2:]
         roslaunch_file2 = roslaunch.rlutil.resolve_launch_arguments(cli_args2)
-        launch_files = [(roslaunch_file1,roslaunch_args1),roslaunch_file2]
+        roslaunch_args2 = cli_args2[2:]
+        launch_files = [(roslaunch_file1,roslaunch_args1),(roslaunch_file2,roslaunch_args2)]
         self.launch = roslaunch.parent.ROSLaunchParent(uuid, launch_files)
         self.launch.start()
 
