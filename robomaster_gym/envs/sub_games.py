@@ -1,8 +1,7 @@
-from robomaster_env import *
+from .robomaster_env import *
 from copy import deepcopy
 import scipy.spatial.distance.euclidean as L2
 from numpy.random import random
-from utils import *
 
 import roslaunch
 
@@ -53,7 +52,7 @@ class CloseQuarter(RobomasterEnv):
         state,_,_,_ = super.step(action1, action2)
         self.rewards[0] += self.reward_function((self._robot_hp[1][0],prev_robot_hp[1][0]))
         self.rewards[1] += self.reward_function((self._robot_hp[2][0],prev_robot_hp[2][0]))
-        distance = L2(self.robot_coords[0], self.robot_coords[1])
+        distance = L2(self.robot_coords[1], self.robot_coords[2])
         if distance > radius or 0 in self._robot_hp:
             rewards, done = deepcopy(self.rewards), True
         else:
@@ -62,7 +61,7 @@ class CloseQuarter(RobomasterEnv):
         return state, rewards, done, _
 
     def find_init_pose(self):
-        obstacles = self.segments+[[0,0, 0,5.1],[0,5.1, 8.1,5.1],[8.1,5.1, 8.1,0],[8.1,0, 0,0]]
+        obstacles = self.segments
         robot_radius = L2(.550,.420)/2
 
         p = [random()*(8.1-robot_radius)+robot_radius,random()*(5.1-robot_radius)+robot_radius]
