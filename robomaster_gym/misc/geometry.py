@@ -125,6 +125,9 @@ def distance(x1, y1, x2, y2):
     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
 def angleTo(x1, y1, x2, y2):
+    """
+    From 0 to 2pi
+    """
     assert not (x1 == 0 and y1 == 0) and not (x2 == 0 and y2 == 0), "neither point should be the origin"
     if x1 == x2:
         if y1 < y2:
