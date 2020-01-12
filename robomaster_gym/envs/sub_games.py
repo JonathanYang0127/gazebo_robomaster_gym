@@ -77,7 +77,8 @@ class CloseQuarter(RobomasterEnv):
 
 def _check_collisions_bounds(obstacles, p, rad):
     for obstacle in obstacles:
-        if lines_cross(*(obstacle+[p['x']-rad,p['y'],p['x']+rad,p['y']])) or lines_cross(*(obstacle+[p['x'],p['y']-rad,p['x'],p['y']+rad])):
+        if lines_cross(*(obstacle+tuple(p['x']-rad,p['y'],p['x']+rad,p['y'])))\
+            or lines_cross(*(obstacle+tuple(p['x'],p['y']-rad,p['x'],p['y']+rad))):
             return True
     if p['x'] < 0 or p['x'] > 8.1 or p['y'] < 0 or p['y'] > 5.1:
         return True
