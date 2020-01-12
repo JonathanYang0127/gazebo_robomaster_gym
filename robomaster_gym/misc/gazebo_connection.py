@@ -59,7 +59,7 @@ class GazeboConnection():
         modelstate.twist = Twist(linear=Vector3(0,0,0),angular=Vector3(0,0,0))
         resp = self.set_model_state(modelstate)
         if resp.success:
-            print("Setting ${1} successful".format(name))
+            print("Setting {} successful".format(name))
         else:
             print(resp.status_message)
 
