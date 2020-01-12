@@ -1,4 +1,4 @@
-from .constants import *
+from robomaster_gym.misc.constants import *
 
 #####################
 # ROBOT COORDINATES #
