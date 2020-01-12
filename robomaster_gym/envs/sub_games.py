@@ -25,7 +25,7 @@ class CloseQuarter(RobomasterEnv):
         self._shoot -
         self._robot_effects
         """
-        super.__init__()
+        super().__init__()
         self.rewards = [0, 0]
         self.reward_function = lambda damage: damage
 
