@@ -1,6 +1,6 @@
 from .robomaster_env import *
 from copy import deepcopy
-import scipy.spatial.distance.euclidean as L2
+from robomaster_gym.misc.geometry import distance as L2
 from numpy.random import random
 
 import roslaunch
