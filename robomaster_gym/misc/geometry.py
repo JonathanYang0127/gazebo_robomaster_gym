@@ -138,7 +138,7 @@ def lines_cross(x1, y1, x2, y2, x3, y3, x4, y4):
         or ((a1 == math.pi and a2 == math.pi)\
             or b1 == math.pi and b2 == math.pi))
 
-def distance(x1, y1, x2, y2):
+def distance(x1=0, y1=0, x2=0, y2=0):
     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
 def angleTo(x1, y1, x2, y2):
