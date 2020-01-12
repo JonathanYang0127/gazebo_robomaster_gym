@@ -1,3 +1,6 @@
+
+import random
+
 class DemoPool:
 
 	def __init__(self, max_size=1e6):
@@ -56,3 +59,16 @@ class DemoPool:
 		self._prune()
 		return self._fields
 
+chance = lambda prob: random.random() < prob
+
+# Zone Types:
+# 1: no movement debuff
+# -1: no shoot debuff
+# 2: team 0-1 health refill -2: team 2-3 health refill
+# 3: team 0-1 bullet refill -3: team 2-3 enemy bullet refill
+# due to symmetry, the second half is always negated version of first half
+def generate_random_zone_config():
+    permutation = [1, 2, 3]
+    random.shuffle(permutation)
+    permutation = [-n if chance(0.5) else n for n in permutation]
+    return permutation + [-n for n in permutation]
