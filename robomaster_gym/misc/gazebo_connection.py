@@ -1,11 +1,12 @@
 #!/usr/bin/env python
+from .geometry import euler_to_quarternion
 
 import rospy
 from std_srvs.srv import Empty
-from gazebo_msgs.msg import ODEPhysics
-from gazebo_msgs.srv import SetPhysicsProperties, SetPhysicsPropertiesRequest
+from gazebo_msgs.msg import ODEPhysics, ModelState
+from gazebo_msgs.srv import SetPhysicsProperties, SetPhysicsPropertiesRequest, SetModelState
 from std_msgs.msg import Float64
-from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import Vector3, Pose, Twist, Point, Quarternion
 
 class GazeboConnection():
     
@@ -14,6 +15,9 @@ class GazeboConnection():
         self.unpause = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
         self.pause = rospy.ServiceProxy('/gazebo/pause_physics', Empty)
         self.reset_proxy = rospy.ServiceProxy('/gazebo/reset_simulation', Empty)
+
+        # For benchmarks
+        self.set_model_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
         # Setup the Gravity Controle system
         service_name = '/gazebo/set_physics_properties'
@@ -46,6 +50,16 @@ class GazeboConnection():
             self.reset_proxy()
         except:
             print ("/gazebo/reset_simulation service call failed")
+
+    def setModelState(self, name, Y, x,y,z=.212):
+        rospy.wait_for_service('/gazebo/set_model_state')
+        try:
+            modelstate = ModelState()
+            modelstate.model_name = name
+            modelstate.pose = Pose(position=Point(x,y,z),orientation=Quarternion(euler_to_quarternion(yaw=Y)))
+            self.set_model_state(modelstate)
+        except:
+            print ("/gazebo/set_model_state service call failed")
 
     def resetWorld(self):
         rospy.wait_for_service('/gazebo/reset_world')

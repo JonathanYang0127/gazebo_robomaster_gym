@@ -35,6 +35,23 @@ def quaternion_to_euler(x, y, z, w):
 
     return X, Y, Z
 
+def euler_to_quarternion(yaw=0, pitch=0, roll=0):
+    """
+    Credit: Wikipedia
+    """
+    cy = math.cos(yaw * 0.5)
+    sy = math.sin(yaw * 0.5)
+    cp = math.cos(pitch * 0.5)
+    sp = math.sin(pitch * 0.5)
+    cr = math.cos(roll * 0.5)
+    sr = math.sin(roll * 0.5)
+
+    w = cy * cp * cr + sy * sp * sr
+    x = cy * cp * sr - sy * sp * cr
+    y = sy * cp * sr + cy * sp * cr
+    z = sy * cp * cr - cy * sp * sr
+    return x,y,z,w
+
 
 # return the coordinates of corners of a robot given its odom info
 # format: [(x1, y1, x2, y2)] * 4
