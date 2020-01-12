@@ -28,10 +28,8 @@ pressed_keys = {
     'j': False
 }
 
-env = gym.make('robomaster-env-v0')._start_rospy()
-env.reset()
-pygame.init()
-screen = pygame.display.set_mode((100, 100))
+env = gym.make('robomaster-env-v0', statistics_gui = True)._start_rospy()
+obs = env.reset()
 
 while True:
     dx = np.array([0, 0, 0, 0])
