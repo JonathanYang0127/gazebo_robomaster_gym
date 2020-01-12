@@ -34,7 +34,7 @@ class CloseQuarter(RobomasterEnv):
         prev_robot_hp = deepcopy(self._robot_hp)
         action1 = [0,0,0,0]+action1[4:]
         action2 = action2[:4]+[0,0,0,0]
-        state,_,_,_ = super.step(action1, action2)
+        state,_,_,_ = super(CloseQuarter,self).step(action1, action2)
         self.rewards[0] += self.reward_function((self._robot_hp[1][0],prev_robot_hp[1][0]))
         self.rewards[1] += self.reward_function((self._robot_hp[2][0],prev_robot_hp[2][0]))
         distance = L2(self.robot_coords[1], self.robot_coords[2])
