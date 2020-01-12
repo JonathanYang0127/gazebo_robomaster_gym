@@ -6,7 +6,7 @@ from std_srvs.srv import Empty
 from gazebo_msgs.msg import ODEPhysics, ModelState
 from gazebo_msgs.srv import SetPhysicsProperties, SetPhysicsPropertiesRequest, SetModelState
 from std_msgs.msg import Float64
-from geometry_msgs.msg import Vector3, Pose, Twist, Point, Quarternion
+from geometry_msgs.msg import Vector3, Pose, Twist, Point, Quaternion
 
 class GazeboConnection():
     
@@ -56,7 +56,7 @@ class GazeboConnection():
         try:
             modelstate = ModelState()
             modelstate.model_name = name
-            modelstate.pose = Pose(position=Point(x,y,z),orientation=Quarternion(euler_to_quarternion(yaw=Y)))
+            modelstate.pose = Pose(position=Point(x,y,z),orientation=Quaternion(euler_to_quarternion(yaw=Y)))
             self.set_model_state(modelstate)
         except:
             print ("/gazebo/set_model_state service call failed")
