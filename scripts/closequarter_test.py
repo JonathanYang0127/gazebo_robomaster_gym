@@ -15,7 +15,7 @@ if __name__ == '__main__':
     launch = roslaunch.parent.ROSLaunchParent(uuid, [roslaunch_file1])
     launch.start()
 
-    env = gym.make('robomaster-env-v0')._start_rospy()
+    env = gym.make('closequarter-env-v0')._start_rospy()
 
     for i in range(1000):
         state, reward, done, info = env.step([0, 1, 0, 0, 0, 0, -1, 0], [0, 0, -1, 0, 0, 0, 1, 0])
