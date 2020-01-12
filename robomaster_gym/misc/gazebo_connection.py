@@ -57,11 +57,11 @@ class GazeboConnection():
         modelstate.model_name = name
         modelstate.pose = Pose(position=Point(x,y,z),orientation=Quaternion(*euler_to_quarternion(yaw=Y)))
         modelstate.twist = Twist(linear=Vector3(0,0,0),angular=Vector3(0,0,0))
-        success,status = self.set_model_state(modelstate)
-        if success:
+        resp = self.set_model_state(modelstate)
+        if resp.success:
             print("Setting ${1} successful".format(name))
         else:
-            print(status)
+            print(resp.status_message)
 
     def resetWorld(self):
         rospy.wait_for_service('/gazebo/reset_world')
