@@ -11,7 +11,7 @@ if __name__ == '__main__':
     # roslaunch_file2 = roslaunch.rlutil.resolve_launch_arguments(cli_args2)[0]
     # roslaunch_args2 = cli_args2[2:]
     # launch_files = [roslaunch_file1,(roslaunch_file2,roslaunch_args2)]
-    launch = roslaunch.parent.ROSLaunchParent(uuid, roslaunch_file1)
+    launch = roslaunch.parent.ROSLaunchParent(uuid, [roslaunch_file1])
     launch.start()
 
     env = gym.make('closequarter-env-v0')._start_rospy()
