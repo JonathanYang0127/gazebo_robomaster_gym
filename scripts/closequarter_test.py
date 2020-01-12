@@ -1,6 +1,7 @@
 import gym
 import robomaster_gym
 import roslaunch
+import time
 
 if __name__ == '__main__': 
     uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
@@ -15,3 +16,9 @@ if __name__ == '__main__':
     launch.start()
 
     env = gym.make('closequarter-env-v0')._start_rospy()
+
+    for i in range(1000):
+        state, reward, done, info = env.step([0, 1, 0, 0, 0, 0, -1, 0], [0, 0, -1, 0, 0, 0, 1, 0])
+        time.sleep(0.01)
+        if done:
+            env.reset()
