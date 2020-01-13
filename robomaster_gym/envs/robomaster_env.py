@@ -2,6 +2,8 @@ import rospy
 import gym
 import math
 import time
+import pygame
+import numpy as np
 
 from roborts_msgs.msg import TwistAccel, GimbalAngle
 from std_msgs.msg import Empty
@@ -12,6 +14,7 @@ from sensor_msgs.msg import JointState
 from robomaster_gym.misc.gazebo_connection import GazeboConnection
 from robomaster_gym.misc.geometry import *
 from robomaster_gym.misc.constants import *
+
 
 
 class RobomasterEnv(gym.Env):
@@ -59,6 +62,56 @@ class RobomasterEnv(gym.Env):
         # Set up gazebo connection
         self.gazebo = GazeboConnection()
         self.gazebo.pauseSim()
+
+        # Set up pygame
+        self._statistics_gui = statistics_gui
+        self._setup_pygame()
+
+    
+    def _setup_pygame(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((1500, 300), pygame.RESIZABLE)
+        if self._statistics_gui:
+            self.screen.fill(pygame.Color('Black'))
+            self.font = pygame.font.SysFont('monospace', 40)
+            self.update_statistics({'HP': self._robot_hp,
+                                    'MD': [self._robot_effects[i].get(2, 0) for i in range(4)]})
+
+
+    def update_statistics(self, statistics):
+        text = ''
+        text += '{:15s} {:15s} {:15s} {:15s}\n'.format('Robot 0', 'Robot 1', 'Robot 2', 'Robot 3')
+        for key, values in statistics.items():
+            for v in values:
+                text += '{:5s} {:9s} '.format(key+':', str(v))
+            text += '\n'
+        self.screen.fill(pygame.Color('Black'))
+        self.blit_text(self.screen, text, (20, 20), self.font)
+        pygame.display.update()
+
+
+    def blit_text(self, surface, text, pos, font, color=pygame.Color('white')):
+        words = [word.split(' ') for word in text.splitlines()]  # 2D array where each row is a list of words.
+        space = font.size(' ')[0]  # The width of a space.
+        max_width, max_height = surface.get_size()
+        x, y = pos
+        index = 0
+        for line in words:
+            for word in line:
+                word_surface = font.render(word, 0, color)
+                word_width, word_height = word_surface.get_size()
+                if index != 0:
+                    word_height -= 10
+                else:
+                    word_height += 5
+                if x + word_width >= max_width:
+                    x = pos[0]  # Reset the x
+                    y += word_height  # Start on new row.
+                surface.blit(word_surface, (x, y))
+                x += word_width + space
+            x = pos[0]  # Reset the x.
+            y += word_height 
+            index += 1
 
     def check_collision_with_obstacle(robot1, robot2):
         pass
@@ -180,7 +233,7 @@ class RobomasterEnv(gym.Env):
             if self._robot_effects[robot_number].get(1, False):
                 self._robot_hp[robot_number] = min(2000, self.robot_hp[robot_number] + 200)
                 self._robot_effects[robot_number][1] = False
-            if self._robot_effects[robot_number].get(2, 0) > 0:
+            if self._robot_effects[robot_number].get(2, 0) > 1e-5:
                 if robot_number == 0:
                     action1[0] = 0
                     action1[1] = 0
@@ -198,7 +251,7 @@ class RobomasterEnv(gym.Env):
                     action2[5] = 0
                     action2[6] = 0
                 self._robot_effects[robot_number][2] -= self._running_step
-            if self._robot_effects[robot_number].get(3, 0) > 0:
+            if self._robot_effects[robot_number].get(3, 0) > 1e-5:
                 if robot_number == 0:
                     action1[3] = 0
                 elif robot_number == 1:
@@ -246,6 +299,11 @@ class RobomasterEnv(gym.Env):
         reward = self.get_reward(state, action1, action2)
         done = self._timestep >= self._max_timesteps
 
+        if self._statistics_gui:
+            best_plates = [self.get_best_enemy_plate(i) for i in range(4)]
+            self.update_statistics({'HP': self._robot_hp,
+                                    'MD': [round(self._robot_effects[i].get(2, 0), 1) for i in range(4)],
+                                    'CE': [k if k is None else k[0] for k in best_plates]})
         return state, reward, done, {}
 
     def reset(self):
@@ -257,11 +315,12 @@ class RobomasterEnv(gym.Env):
         self._robot_hp = [robot_max_hp] * 4
         self._num_projectiles = [50, 0, 50, 0]
         self._barrel_heat = [0] * 4
+        self.step(np.zeros(8), np.zeros(8))
         self.gazebo.pauseSim()
         self.gazebo.resetSim()
 
         # EXTRA: Reset JoinStateControlers because sim reset doesnt reset TFs, generating time problems
-        # self.controllers_object.reset_monoped_joint_controllers()
+        #self.controllers_object.reset_monoped_joint_controllers()
 
         self.gazebo.pauseSim()
         state = self.get_state()
