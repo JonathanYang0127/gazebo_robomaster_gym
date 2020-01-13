@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     for i in range(1000):
         state, reward, done, info = env.step([0, 1, 0, 0, 0, 0, -1, 0], [0, 0, -1, 0, 0, 0, 1, 0])
-        print(env.robot_coords)
+        print(env._odom_info)
         time.sleep(0.01)
         if done:
             env.reset()
