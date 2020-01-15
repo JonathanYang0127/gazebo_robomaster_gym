@@ -51,7 +51,7 @@ class CloseQuarter(RobomasterEnv):
         self.gazebo.setModelState('roborts_2',**p)
         self.gazebo.setModelState('roborts_3',**p1)
         state = self.get_state()
-        self.gazebo.pauseSim()
+        # self.gazebo.pauseSim()
 
         return state
 
