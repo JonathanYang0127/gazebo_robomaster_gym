@@ -1,1 +1,3 @@
-robomaster_gym
+rospkg
+gym
+pygame

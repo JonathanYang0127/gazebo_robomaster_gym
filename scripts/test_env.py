@@ -1,5 +1,5 @@
 import gym
-import robomaster_gym
+from robomaster_gym.misc import *
 import time
 
 if __name__ == '__main__': 

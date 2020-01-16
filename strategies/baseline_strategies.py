@@ -1,5 +1,5 @@
 
-no_op = [0, 0, 0, 0, 0, 0, 0, 0]
+no_op = [0, 0, 0, 0]
 
 def doNothing(env):
     return no_op
