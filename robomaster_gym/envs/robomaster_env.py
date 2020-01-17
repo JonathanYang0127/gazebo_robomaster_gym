@@ -15,20 +15,13 @@ import sys
 sys.path.append('/home/kenguan/roborts_ws/src/gazebo_robomaster_gym')
 
 from robomaster_gym.misc import *
-# from robomaster_gym.misc.gazebo_connection import GazeboConnection
-# from robomaster_gym.misc.geometry import *
-# from robomaster_gym.misc.constants import *
-
-from strategies.baseline_strategies import *
+from strategies import *
 
 class RobomasterEnv(gym.Env):
     def __init__(self, statistics_gui=False):
         # Set up state parameters
         self._odom_info = [None] * 4
         self._gimbal_angle_info = [None] * 4
-        self._robot_hp = [robot_max_hp] * 4
-        self._num_projectiles = [50, 0, 50, 0]
-        self._barrel_heat = [0] * 4
         self._shoot = [0, 0, 0, 0]
 
         self.damage_threshold = 6
@@ -51,12 +44,7 @@ class RobomasterEnv(gym.Env):
         self.obstacle_buffer = 0.015
         self.segments = generate_obstacle_segments(self.obstacle_buffer)
 
-        self.spawn_buff_zones()
-        # self._zone_types = [-1,-1,-1,-1,-1,-1]
-
-        #Effects per robot
-        self.move_disable = [0, 0, 0, 0]
-        self.shoot_disable = [0, 0, 0, 0]
+        self.on_init()
 
         # Set up gazebo connection
         self.gazebo = GazeboConnection()
@@ -65,6 +53,16 @@ class RobomasterEnv(gym.Env):
         # Set up pygame
         self._statistics_gui = statistics_gui
         self._setup_pygame()
+
+    def on_init(self):
+        self._timestep = 0
+        self._robot_hp = [robot_max_hp] * 4
+        self._num_projectiles = [50, 0, 50, 0]
+        self._barrel_heat = [0] * 4
+        self.spawn_buff_zones()
+
+        self.move_disable = [0, 0, 0, 0]
+        self.shoot_disable = [0, 0, 0, 0]
 
     
     def _setup_pygame(self):
@@ -113,9 +111,6 @@ class RobomasterEnv(gym.Env):
             y += word_height 
             index += 1
 
-    def check_collision_with_obstacle(robot1, robot2):
-        pass
-
     def get_enemy_team(self, robot_index):
         if robot_index < 2:
             return (2, 3)
@@ -152,7 +147,7 @@ class RobomasterEnv(gym.Env):
     def get_best_enemy_plate(self, robot_index):
         if not all(self._odom_info):
             return
-        x, y, z, yaw = self._odom_info[robot_index]
+        x, y, yaw = self._odom_info[robot_index]
         best_plate = None
         damage = self.damage_threshold
         for enemy in self.get_enemy_team(robot_index):
@@ -172,7 +167,7 @@ class RobomasterEnv(gym.Env):
 
     def odometry_callback(self, msg):
         _id = int(msg._connection_header['topic'][9]) - 1
-        self._odom_info[_id] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z,
+        self._odom_info[_id] = [msg.pose.pose.position.x, msg.pose.pose.position.y,
                                 quaternion_to_euler(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
                                                     msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)[2]]
         self.update_robot_coords(_id)
@@ -184,13 +179,15 @@ class RobomasterEnv(gym.Env):
         # converts timestep to real time
         return self._timestep * self._running_step * self._real_time_conversion
 
-    def _check_in_zone(self, position):
+    def _check_in_zone(self, robot_index, odom_info):
         # Input: x y z position
         # Checks if robot are in a buff/debuff zone, returns the zone
-        for i in range(len(zones)):
-            edge_buffer = 0.05 if self._zone_types[i % 3] == 0 or self._zone_types[i % 3] == 1 else -0.05
-            if position[0] >= zones[i][0] + edge_buffer and position[0] <= zones[i][1] - edge_buffer and position[1] >= \
-                    zones[i][2] + edge_buffer and position[1] <= zones[i][3] - edge_buffer:
+        x, y, yaw = odom_info
+        for i in range(6):
+            _type = self._zone_types[i]
+            edge_buffer = 0.05 if abs(_type) >= 2 and (robot_index <= 1) == (_type > 0) else -0.05 # enlarge debuffs, shrink buffs
+            left, right, bottom, top = zones[i]
+            if x >= left + edge_buffer and x <= right - edge_buffer and y >= bottom + edge_buffer and y <= top - edge_buffer:
                 return i
 
     def waypoint_to_cmd(self, robot_index, waypoint):
@@ -223,7 +220,7 @@ class RobomasterEnv(gym.Env):
         #Check for/update debuffs to robots if in zone
         for robot_index in range(4):
             if self._odom_info[robot_index] is not None:
-                zone_index = self._check_in_zone(self._odom_info[robot_index])
+                zone_index = self._check_in_zone(robot_index, self._odom_info[robot_index])
                 if zone_index is None or not self._zones_active[zone_index]:
                     continue
                 self._zones_active[zone_index] = False
@@ -276,19 +273,12 @@ class RobomasterEnv(gym.Env):
             self.update_statistics({'HP': self._robot_hp,
                                     'MD': self.move_disable,
                                     'SD': self.shoot_disable,
-                                    'CE': [k if k is None else k[0] for k in best_plates]})
+                                    'CE': [None if k is None else k[0] for k in best_plates]})
         return state, reward, done, {}
 
     def reset(self):
-        self._zones_active = [False] * 6
-        self._zone_types = [0, 3, 2]
-        self._robot_debuffs = [[], [], [], []]
-        self._timestep = 0
-        self.real_time = 0
-        self._robot_hp = [robot_max_hp] * 4
-        self._num_projectiles = [50, 0, 50, 0]
-        self._barrel_heat = [0] * 4
-        self.step(np.zeros(8), np.zeros(8))
+        self.on_init()
+        self.step([no_op] * 4)
         self.gazebo.pauseSim()
         self.gazebo.resetSim()
 
@@ -313,11 +303,9 @@ class RobomasterEnv(gym.Env):
 
         if not self._odom_info[0]:
             return [[None], [None]]
-
-        robot_state = [list(self._odom_info[i]) + [self._num_projectiles[i], self._barrel_heat[i], self._robot_hp[i]]
+        robot_state = [self._odom_info[i][:] + [self._num_projectiles[i], self._barrel_heat[i], self._robot_hp[i]]
                        for i in range(4)]
-        return [robot_state[0] + robot_state[1] + robot_state[2] + robot_state[3],
-                robot_state[0] + robot_state[1] + robot_state[2] + robot_state[3]]
+        return [robot_state[:], robot_state[:]]
 
     def get_reward(self, state, actions):
         return 0
