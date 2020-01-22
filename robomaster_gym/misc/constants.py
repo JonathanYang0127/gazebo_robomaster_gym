@@ -8,6 +8,11 @@ robot_width = 0.420
 armor_size = 0.131
 armor_thickness = 0.015
 
+robot_max_speed = 3.11
+robot_max_angular_speed_deg = 330
+robot_max_angular_speed = robot_max_angular_speed_deg / 180 * math.pi
+robot_max_accel = 0.7
+
 gimbal_range_deg = 82.5
 gimbal_range_angle = gimbal_range_deg / 180 * math.pi
 

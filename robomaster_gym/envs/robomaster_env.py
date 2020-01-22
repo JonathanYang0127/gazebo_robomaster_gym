@@ -43,6 +43,7 @@ class RobomasterEnv(gym.Env):
         # buffer is added
         self.obstacle_buffer = 0.015
         self.segments = generate_obstacle_segments(self.obstacle_buffer)
+        self.navigator = CriticalPointNavigator(self)
 
         self.on_init()
 
@@ -60,6 +61,7 @@ class RobomasterEnv(gym.Env):
         self._num_projectiles = [50, 0, 50, 0]
         self._barrel_heat = [0] * 4
         self.spawn_buff_zones()
+        # self._zone_types = [-1] * 6
 
         self.move_disable = [0, 0, 0, 0]
         self.shoot_disable = [0, 0, 0, 0]
@@ -191,6 +193,9 @@ class RobomasterEnv(gym.Env):
                 return i
 
     def waypoint_to_cmd(self, robot_index, waypoint):
+        cmd = self.navigator.navigate(robot_index, waypoint)
+        if cmd:
+            return cmd
         if robot_index == 0:
             return [0, 1, 0, 0]
         return [0, 0, -1, 0]
@@ -226,9 +231,6 @@ class RobomasterEnv(gym.Env):
                 self._zones_active[zone_index] = False
                 zone_type = self._zone_types[zone_index]
 
-                if robot_index == 0:
-                    print(zone_index, zone_type)
-
                 if zone_type % 2 == 0:
                     self.apply_heal(zone_type > 0)
                 elif zone_type % 3 == 0:
@@ -240,14 +242,14 @@ class RobomasterEnv(gym.Env):
 
         #Apply buffs/debuffs
         for robot_index, _time in enumerate(self.move_disable):
-            if _time > float_eq_threshold:
+            if _time > 0:
                 actions[robot_index] = no_op
-                self.move_disable[robot_index] -= self._running_step
+                self.move_disable[robot_index] = round(self.move_disable[robot_index] - self._running_step, 1)
 
         for robot_index, _time in enumerate(self.shoot_disable):
-            if _time > float_eq_threshold:
+            if _time > 0:
                 actions[robot_index][3] = 0
-                self.shoot_disable[robot_index] -= self._running_step
+                self.shoot_disable[robot_index] = round(self.shoot_disable[robot_index] - self._running_step, 1)
 
         best_plates = [self.get_best_enemy_plate(i) for i in range(4)]
 
@@ -302,10 +304,10 @@ class RobomasterEnv(gym.Env):
         # robot hp: 1
 
         if not self._odom_info[0]:
-            return [[None], [None]]
+            return [None], [None]
         robot_state = [self._odom_info[i][:] + [self._num_projectiles[i], self._barrel_heat[i], self._robot_hp[i]]
                        for i in range(4)]
-        return [robot_state[:], robot_state[:]]
+        return robot_state[:], robot_state[:]
 
     def get_reward(self, state, actions):
         return 0
@@ -335,8 +337,9 @@ class RobomasterEnv(gym.Env):
 if __name__ == '__main__':
     env = RobomasterEnv(True)._start_rospy()
     test_waypoints = [(1, 1), (1, 4), (7, 1), (7, 4)]
+    dummy_strategy = lambda i: test_waypoints[i]
     for i in range(1000):
-        test_cmds = [env.waypoint_to_cmd(i, test_waypoints[i]) for i in range(4)]
+        test_cmds = [env.waypoint_to_cmd(i, dummy_strategy(i)) for i in range(4)]
         state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)
         if done:
