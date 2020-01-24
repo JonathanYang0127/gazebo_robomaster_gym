@@ -11,9 +11,6 @@ from keyboard.msg import Key
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 
-import sys
-sys.path.append('/home/kenguan/roborts_ws/src/gazebo_robomaster_gym')
-
 from robomaster_gym.misc import *
 from strategies import *
 
@@ -28,7 +25,7 @@ class RobomasterEnv(gym.Env):
 
         self.robot_coords = [None] * 4
         self.robot_plates_coords = [None] * 4
-        
+
         # Amount of time running per timestep
         self._running_step = 0.1
 
