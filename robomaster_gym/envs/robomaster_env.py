@@ -300,7 +300,7 @@ class RobomasterEnv(gym.Env):
         # barrel heat: 1
         # robot hp: 1
 
-        if not self._odom_info[0]:
+        if not all(self._odom_info):
             return [None], [None]
         robot_state = [self._odom_info[i][:] + [self._num_projectiles[i], self._barrel_heat[i], self._robot_hp[i]]
                        for i in range(4)]
