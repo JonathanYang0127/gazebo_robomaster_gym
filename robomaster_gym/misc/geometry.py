@@ -125,3 +125,12 @@ def angleDiff(a1, a2):
 
 def midpoint(x1, y1, x2, y2):
     return (x1 + x2) / 2, (y1 + y2) / 2
+
+def simplify_angle(angle):
+    """
+    avoid large turning (turning more than 180 degrees)
+    :param angle: current angle in RAD
+    """
+    if angle > math.pi / 2:
+        return math.pi / 2 - angle
+    return angle
