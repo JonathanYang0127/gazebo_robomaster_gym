@@ -1,8 +1,5 @@
+from robomaster_gym.misc.navigation import *
 
-no_op = [0, 0, 0, 0, 0, 0, 0, 0]
-
-def doNothing(env):
-    return no_op
-
-def spin(env):
-    return [0, 0, 1, 0] * 2
+def doNothing(env, robot_index):
+    x, y, yaw = env._odom_info[robot_index]
+    return x, y

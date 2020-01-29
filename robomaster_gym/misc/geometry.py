@@ -1,4 +1,4 @@
-from robomaster_gym.misc.constants import *
+from .constants import *
 
 #####################
 # ROBOT COORDINATES #
@@ -56,7 +56,7 @@ def euler_to_quarternion(yaw=0, pitch=0, roll=0):
 # return the coordinates of corners of a robot given its odom info
 # format: [(x1, y1, x2, y2)] * 4
 def robot_coords_from_odom(odom_info):
-    x, y, z, yaw = odom_info
+    x, y, yaw = odom_info
     coords = []
     for angle in (yaw + robot_diag_angle, yaw + math.pi - robot_diag_angle, yaw + math.pi + robot_diag_angle, yaw - robot_diag_angle):
         xoff, yoff = math.cos(angle) * robot_diag_length, math.sin(angle) * robot_diag_length
@@ -67,7 +67,7 @@ def robot_coords_from_odom(odom_info):
 # return the coordinates of armor plates of a robot given its odom info
 # format: [(x1, y1, x2, y2)] * 4
 def plate_coords_from_odom(odom_info):
-    x, y, z, yaw = odom_info
+    x, y, yaw = odom_info
     frontx1off, fronty1off = math.cos(yaw + forward_armor_diag_angle) * forward_armor_diag_length, math.sin(yaw + forward_armor_diag_angle) * forward_armor_diag_length
     frontx2off, fronty2off = math.cos(yaw - forward_armor_diag_angle) * forward_armor_diag_length, math.sin(yaw - forward_armor_diag_angle) * forward_armor_diag_length
     backx1off, backy1off = math.cos(yaw + math.pi + forward_armor_diag_angle) * forward_armor_diag_length, math.sin(yaw + math.pi + forward_armor_diag_angle) * forward_armor_diag_length

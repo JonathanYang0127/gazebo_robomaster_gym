@@ -11,20 +11,14 @@ from std_msgs.msg import Empty
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 
-from robomaster_gym.misc.gazebo_connection import GazeboConnection
-from robomaster_gym.misc.geometry import *
-from robomaster_gym.misc.constants import *
-
-
+from robomaster_gym.misc import *
+from strategies import *
 
 class RobomasterEnv(gym.Env):
     def __init__(self, statistics_gui=False):
         # Set up state parameters
-        self._odom_info = [[None]] * 4
-        self._gimbal_angle_info = [[None]] * 4
-        self._robot_hp = [robot_max_hp] * 4
-        self._num_projectiles = [50, 0, 50, 0]
-        self._barrel_heat = [0] * 4
+        self._odom_info = [None] * 4
+        self._gimbal_angle_info = [None] * 4
         self._shoot = [0, 0, 0, 0]
 
         self.damage_threshold = 6
@@ -46,18 +40,9 @@ class RobomasterEnv(gym.Env):
         # buffer is added
         self.obstacle_buffer = 0.015
         self.segments = generate_obstacle_segments(self.obstacle_buffer)
+        self.navigator = CriticalPointNavigator(self)
 
-        self._zones_active = [False] * 6
-
-        # Zone Types:
-        # 0: refill
-        # 1: hp recovery
-        # 2: no movement debuff
-        # 3: no shoot debuff
-        self._zone_types = [0, 3, 2]
-
-        # Effects per robot
-        self._robot_effects = [dict(), dict(), dict(), dict()]
+        self.on_init()
 
         # Set up gazebo connection
         self.gazebo = GazeboConnection()
@@ -67,15 +52,27 @@ class RobomasterEnv(gym.Env):
         self._statistics_gui = statistics_gui
         self._setup_pygame()
 
+    def on_init(self):
+        self._timestep = 0
+        self._robot_hp = [robot_max_hp] * 4
+        self._num_projectiles = [50, 0, 50, 0]
+        self._barrel_heat = [0] * 4
+        self.spawn_buff_zones()
+        # self._zone_types = [-1] * 6
+
+        self.move_disable = [0, 0, 0, 0]
+        self.shoot_disable = [0, 0, 0, 0]
+
     
     def _setup_pygame(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((1500, 300), pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode((1500, 400), pygame.RESIZABLE)
         if self._statistics_gui:
             self.screen.fill(pygame.Color('Black'))
             self.font = pygame.font.SysFont('monospace', 40)
             self.update_statistics({'HP': self._robot_hp,
-                                    'MD': [self._robot_effects[i].get(2, 0) for i in range(4)]})
+                                    'MD': self.move_disable,
+                                    'SD': self.shoot_disable})
 
 
     def update_statistics(self, statistics):
@@ -113,9 +110,6 @@ class RobomasterEnv(gym.Env):
             y += word_height 
             index += 1
 
-    def check_collision_with_obstacle(robot1, robot2):
-        pass
-
     def get_enemy_team(self, robot_index):
         if robot_index < 2:
             return (2, 3)
@@ -148,141 +142,116 @@ class RobomasterEnv(gym.Env):
 
     # return the index and optimal shoot velocity of best enemy plate visible
     # None if no index is visible
+    # NOTE: there will be an additional input, size of plate viewed by Vision, that helps calibrate this calculation irl.
     def get_best_enemy_plate(self, robot_index):
-        x, y, z, yaw = self._odom_info[robot_index]
+        if not all(self._odom_info):
+            return
+        x, y, yaw = self._odom_info[robot_index]
         best_plate = None
         damage = self.damage_threshold
         for enemy in self.get_enemy_team(robot_index):
-            for index in range(4):
-                x1, y1, x2, y2 = self.robot_plates_coords[enemy][index]
+            for plate_index in range(4):
+                x1, y1, x2, y2 = self.robot_plates_coords[enemy][plate_index]
                 center_x, center_y = midpoint(x1, y1, x2, y2)
                 dis = distance(x, y, center_x, center_y)
                 angle_diff = angleDiff(angleTo(x, y, center_x, center_y), yaw)
                 if dis < gimbal_range_dis and angle_diff <= gimbal_range_angle:
-                    exp_damage, vel = self.expected_damage_with_optimal_shoot_vel(armor_plate_damage[index], angle_diff,
+                    exp_damage, vel = self.expected_damage_with_optimal_shoot_vel(armor_plate_damage[plate_index], angle_diff,
                                                                                   dis)
                     if exp_damage > damage:
                         if not self.is_line_of_sight_blocked(x, y, center_x, center_y, robot_index):
-                            best_plate = (enemy, index, vel)
+                            best_plate = (enemy, plate_index, vel)
                             damage = exp_damage
         return best_plate
 
     def odometry_callback(self, msg):
         _id = int(msg._connection_header['topic'][9]) - 1
-        self._odom_info[_id] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z,
+        self._odom_info[_id] = [msg.pose.pose.position.x, msg.pose.pose.position.y,
                                 quaternion_to_euler(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
                                                     msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)[2]]
         self.update_robot_coords(_id)
 
     def gimbal_angle_callback(self, msg):
         self._gimbal_angle_info[int(msg._connection_header['topic'][9]) - 1] = msg.position
-        return
 
     def _timestep_to_real_time(self):
         # converts timestep to real time
         return self._timestep * self._running_step * self._real_time_conversion
 
-    def _check_in_zone(self, position):
+    def _check_in_zone(self, robot_index, odom_info):
         # Input: x y z position
         # Checks if robot are in a buff/debuff zone, returns the zone
-        for i in range(len(zones)):
-            edge_buffer = 0.05 if self._zone_types[i % 3] == 0 or self._zone_types[i % 3] == 1 else -0.05
-            if position[0] >= zones[i][0] + edge_buffer and position[0] <= zones[i][1] - edge_buffer and position[1] >= \
-                    zones[i][2] + edge_buffer and position[1] <= zones[i][3] - edge_buffer:
+        x, y, yaw = odom_info
+        for i in range(6):
+            _type = self._zone_types[i]
+            edge_buffer = 0.05 if abs(_type) >= 2 and (robot_index <= 1) == (_type > 0) else -0.05 # enlarge debuffs, shrink buffs
+            left, right, bottom, top = zones[i]
+            if x >= left + edge_buffer and x <= right - edge_buffer and y >= bottom + edge_buffer and y <= top - edge_buffer:
                 return i
 
-    def step(self, action1, action2):
-        # x velocity, y velocity, twist angular, shoot
+    def waypoint_to_cmd(self, robot_index, waypoint):
+        cmd = self.navigator.navigate(robot_index, waypoint)
+        if cmd:
+            return cmd
+        if robot_index == 0:
+            return [0, 1, 0, 0]
+        return [0, 0, -1, 0]
 
-        if len(action1) != 8 or len(action2) != 8:
+    def apply_heal(self, is_team_01):
+        index1, index2 = (0, 1) if is_team_01 else (2, 3)
+        self._robot_hp[index1] = min(robot_max_hp, self._robot_hp[index1] + 200)
+        self._robot_hp[index2] = min(robot_max_hp, self._robot_hp[index2] + 200)
+
+    def apply_bullet_refill(self, is_team_01):
+        index1, index2 = (0, 1) if is_team_01 else (2, 3)
+        self._num_projectiles[index1] += 100
+        self._num_projectiles[index2] += 100
+
+    # Call at each minute mark
+    def spawn_buff_zones(self):
+        self._zones_active = [True] * 6
+        self._zone_types = generate_random_zone_config()
+
+    def step(self, actions): 
+        # [[x velocity, y velocity, twist angular, shoot]] * 4
+
+        if len(actions) != 4:
             print("Invalid action!")
             return None, None, None, {}
 
-            # Check for/update debuffs to robots if in zone
-        for position in range(len(self._odom_info)):
-            if self._odom_info[position][0] is not None:
-                zone = self._check_in_zone(self._odom_info[position])
-                if zone is None:
+        #Check for/update debuffs to robots if in zone
+        for robot_index in range(4):
+            if self._odom_info[robot_index] is not None:
+                zone_index = self._check_in_zone(robot_index, self._odom_info[robot_index])
+                if zone_index is None or not self._zones_active[zone_index]:
                     continue
-                if not self._zones_active[zone]:
-                    self._zones_active[zone] = True
+                self._zones_active[zone_index] = False
+                zone_type = self._zone_types[zone_index]
+
+                if zone_type % 2 == 0:
+                    self.apply_heal(zone_type > 0)
+                elif zone_type % 3 == 0:
+                    self.apply_bullet_refill(zone_type > 0)
+                elif zone_type == 1:
+                    self.move_disable[robot_index] = 10
                 else:
-                    continue
-                if position == 0:
-                    print(zone)
-                    print(self._zone_types[zone % 3])
-                    # print(zone, self._odom_info[position])
-                if zone is None:
-                    continue
-                elif self._zone_types[zone % 3] == 0 or self._zone_types[zone % 3] == 1:
-                    if zone < 3:
-                        self._robot_effects[0][self._zone_types[zone % 3]] = True
-                        self._robot_effects[1][self._zone_types[zone % 3]] = True
-                    else:
-                        self._robot_effects[2][self._zone_types[zone % 3]] = True
-                        self._robot_effects[3][self._zone_types[zone % 3]] = True
-                elif self._zone_types[zone % 3] == 2:
-                    self._robot_effects[position][self._zone_types[zone % 3]] = 10
+                    self.shoot_disable[robot_index] = 10
 
-        #print(self._robot_effects[0].get(2, 0))
-        # Apply buffs/debuffs
-        for robot_number in range(len(self._robot_effects)):
-            if self._robot_effects[robot_number].get(0, False):
-                self._num_projectiles[robot_number] += 100
-                self._robot_effects[robot_number][0] = False
-            if self._robot_effects[robot_number].get(1, False):
-                self._robot_hp[robot_number] = min(2000, self.robot_hp[robot_number] + 200)
-                self._robot_effects[robot_number][1] = False
-            if self._robot_effects[robot_number].get(2, 0) > 1e-5:
-                if robot_number == 0:
-                    action1[0] = 0
-                    action1[1] = 0
-                    action1[2] = 0
-                elif robot_number == 1:
-                    action1[4] = 0
-                    action1[5] = 0
-                    action1[6] = 0
-                elif robot_number == 2:
-                    action2[0] = 0
-                    action2[1] = 0
-                    action2[2] = 0
-                else:
-                    action2[4] = 0
-                    action2[5] = 0
-                    action2[6] = 0
-                self._robot_effects[robot_number][2] -= self._running_step
-            if self._robot_effects[robot_number].get(3, 0) > 1e-5:
-                if robot_number == 0:
-                    action1[3] = 0
-                elif robot_number == 1:
-                    action1[7] = 0
-                elif robot_number == 2:
-                    action2[3] = 0
-                elif robot_number == 3:
-                    action2[7] = 0
-                self._robot_effects[robot_number][3] -= self._running_step
+        #Apply buffs/debuffs
+        for robot_index, _time in enumerate(self.move_disable):
+            if _time > 0:
+                actions[robot_index] = no_op
+                self.move_disable[robot_index] = round(self.move_disable[robot_index] - self._running_step, 1)
 
-        # Set action parameters for publisher
-        self.cmd_vel[0].twist.linear.x = action1[0]
-        self.cmd_vel[0].twist.linear.y = action1[1]
-        self.cmd_vel[0].twist.angular.z = action1[2]
-        self._shoot[0] = action1[3]
-        self.cmd_vel[1].twist.linear.x = action1[4]
-        self.cmd_vel[1].twist.linear.y = action1[5]
-        self.cmd_vel[1].twist.angular.z = action1[6]
-        self._shoot[1] = action1[7]
+        for robot_index, _time in enumerate(self.shoot_disable):
+            if _time > 0:
+                actions[robot_index][3] = 0
+                self.shoot_disable[robot_index] = round(self.shoot_disable[robot_index] - self._running_step, 1)
 
-        self.cmd_vel[2].twist.linear.x = action2[0]
-        self.cmd_vel[2].twist.linear.y = action2[1]
-        self.cmd_vel[2].twist.angular.z = action2[2]
-        self._shoot[2] = action2[3]
-        self.cmd_vel[3].twist.linear.x = action2[4]
-        self.cmd_vel[3].twist.linear.y = action2[5]
-        self.cmd_vel[3].twist.angular.z = action2[6]
-        self._shoot[3] = action2[7]
+        best_plates = [self.get_best_enemy_plate(i) for i in range(4)]
 
-        # Publish actions and execute for running_step time
         for i in range(4):
+            self.cmd_vel[i].twist.linear.x, self.cmd_vel[i].twist.linear.y, self.cmd_vel[i].twist.angular.z, self._shoot[i] = actions[i]
             self.pub_cmd_vel[i].publish(self.cmd_vel[i])
             self.pub_gimbal_angle[i].publish(self.cmd_gimbal[i])
 
@@ -296,26 +265,19 @@ class RobomasterEnv(gym.Env):
 
         # calculate state and reward
         state = self.get_state()
-        reward = self.get_reward(state, action1, action2)
+        reward = self.get_reward(state, actions)
         done = self._timestep >= self._max_timesteps
 
         if self._statistics_gui:
-            best_plates = [self.get_best_enemy_plate(i) for i in range(4)]
             self.update_statistics({'HP': self._robot_hp,
-                                    'MD': [round(self._robot_effects[i].get(2, 0), 1) for i in range(4)],
-                                    'CE': [k if k is None else k[0] for k in best_plates]})
+                                    'MD': self.move_disable,
+                                    'SD': self.shoot_disable,
+                                    'CE': [None if k is None else k[0] for k in best_plates]})
         return state, reward, done, {}
 
     def reset(self):
-        self._zones_active = [False] * 6
-        self._zone_types = [0, 3, 2]
-        self._robot_debuffs = [[], [], [], []]
-        self._timestep = 0
-        self.real_time = 0
-        self._robot_hp = [robot_max_hp] * 4
-        self._num_projectiles = [50, 0, 50, 0]
-        self._barrel_heat = [0] * 4
-        self.step(np.zeros(8), np.zeros(8))
+        self.on_init()
+        self.step([no_op] * 4)
         self.gazebo.pauseSim()
         self.gazebo.resetSim()
 
@@ -338,12 +300,13 @@ class RobomasterEnv(gym.Env):
         # barrel heat: 1
         # robot hp: 1
 
-        robot_state = [list(self._odom_info[i]) + [self._num_projectiles[i], self._barrel_heat[i], self._robot_hp[i]]
+        if not self._odom_info[0]:
+            return [None], [None]
+        robot_state = [self._odom_info[i][:] + [self._num_projectiles[i], self._barrel_heat[i], self._robot_hp[i]]
                        for i in range(4)]
-        return [robot_state[0] + robot_state[1] + robot_state[2] + robot_state[3],
-                robot_state[0] + robot_state[1] + robot_state[2] + robot_state[3]]
+        return robot_state[:], robot_state[:]
 
-    def get_reward(self, state, action1, action2):
+    def get_reward(self, state, actions):
         return 0
 
     def _start_rospy(self):
@@ -369,9 +332,12 @@ class RobomasterEnv(gym.Env):
 
 
 if __name__ == '__main__':
-    env = RobomasterEnv()._start_rospy()
+    env = RobomasterEnv(True)._start_rospy()
+    test_waypoints = [(1, 1), (1, 4), (7, 1), (7, 4)]
+    dummy_strategy = lambda i: test_waypoints[i]
     for i in range(1000):
-        state, reward, done, info = env.step([0, 1, 0, 0, 0, 0, -1, 0], [0, 0, -1, 0, 0, 0, 1, 0])
+        test_cmds = [env.waypoint_to_cmd(i, dummy_strategy(i)) for i in range(4)]
+        state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)
         if done:
             env.reset()
