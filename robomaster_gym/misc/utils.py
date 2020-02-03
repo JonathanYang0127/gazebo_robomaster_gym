@@ -72,3 +72,4 @@ def generate_random_zone_config():
     random.shuffle(permutation)
     permutation = [-n if chance(0.5) else n for n in permutation]
     return permutation + [-n for n in permutation]
+
