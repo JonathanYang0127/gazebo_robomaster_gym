@@ -3,7 +3,6 @@ import random
 import roslaunch
 
 class DemoPool:
-
 	def __init__(self, max_size=1e6):
 		self._keys = ('observations', 'actions', 'next_observations', 'rewards', 'terminals')
 		self._fields = {}
@@ -44,7 +43,7 @@ class DemoPool:
 		for key, array in zip(self._keys, arrays):
 			shape = array.shape if type(array) == np.ndarray else (1,)
 			dtype = array.dtype if type(array) == np.ndarray else type(array)
-			self._fields[key] = np.zeros((self._max_size, *shape), dtype=dtype)
+			self._fields[key] = np.zeros((self._max_size, shape), dtype=dtype)
 			self._fields[key][self._pointer] = array
 			# print(key, self._fields[key].shape, self._fields[key].dtype)
 
