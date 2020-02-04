@@ -76,7 +76,7 @@ def generate_random_zone_config():
 class rosFromPython:
 	__instatiated = False
 	def __init__(self):
-		if __instantiated:
+		if rosFromPython.__instantiated:
 			raise Exception("ROS start up should only be run once")
 		self.__instantiated = True
 
