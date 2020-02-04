@@ -332,6 +332,9 @@ class RobomasterEnv(gym.Env):
 
 
 if __name__ == '__main__':
+    # This section runs roslaunch from script.
+    ros_from_python = rosFromPython()
+
     env = RobomasterEnv(True)._start_rospy()
     test_waypoints = [(1, 1), (1, 4), (7, 1), (7, 4)]
     dummy_strategy = lambda i: test_waypoints[i]
@@ -341,3 +344,5 @@ if __name__ == '__main__':
         time.sleep(0.01)
         if done:
             env.reset()
+
+    ros_from_python.shutdown()
