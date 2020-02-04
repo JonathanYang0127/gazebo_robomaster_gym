@@ -74,7 +74,7 @@ def generate_random_zone_config():
     return permutation + [-n for n in permutation]
 
 class rosFromPython:
-	__instatiated = False
+	__instantiated = False
 	def __init__(self):
 		if rosFromPython.__instantiated:
 			raise Exception("ROS start up should only be run once")
