@@ -75,25 +75,26 @@ def generate_random_zone_config():
     return permutation + [-n for n in permutation]
 
 class rosFromPython:
-	__instatiated = False
-	def __init__(self):
-		if __instantiated:
+	__instantiated = False
+	def __init__(self, launches=['roborts_sim multi_robot.launch gui=false']):
+		"""Enter launches as list of strings for each command with no spaces between variables and equal sign."""
+		if rosFromPython.__instantiated:
 			raise Exception("ROS start up should only be run once")
 		self.__instantiated = True
 
-		uuid1 = roslaunch.rlutil.get_or_generate_uuid(None, False)
-		self.roscore = roslaunch.parent.ROSLaunchParent(uuid1,is_core=True)
-		self.roscore.start()
-		uuid2 = roslaunch.rlutil.get_or_generate_uuid(None, False)
+		uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
 		roslaunch.configure_logging(uuid)
-		cli_args1 = ['roborts_sim','multi_robot.launch','gui:=false']
-		roslaunch_file1 = roslaunch.rlutil.resolve_launch_arguments(cli_args1)[0]
-		roslaunch_args1 = cli_args1[2:]
-		self.launch = roslaunch.parent.ROSLaunchParent(uuid2, [(roslaunch_file1,roslaunch_args1)])
+		processed_launches = []
+		for launch in launches:
+			if not launch.find(":=") and launch.find("="):
+				launch.replace("=",":=")
+			cli_args = launch.split(sep=" ")
+			roslaunch_file = roslaunch.rlutil.resolve_launch_arguments(cli_args)[0]
+			roslaunch_args = cli_args[2:]
+			processed_launches += [(roslaunch_file,roslaunch_args)]
+		self.launch = roslaunch.parent.ROSLaunchParent(uuid, processed_launches, is_core=True)
 		self.launch.start()
 
-	
 	def shutdown(self):
-		self.roscore.shutdown()
 		self.launch.shutdown()
 		
