@@ -1,5 +1,6 @@
 
 import random
+import roslaunch
 
 class DemoPool:
 
@@ -73,3 +74,27 @@ def generate_random_zone_config():
     permutation = [-n if chance(0.5) else n for n in permutation]
     return permutation + [-n for n in permutation]
 
+class rosFromPython:
+	__instantiated = False
+	def __init__(self, launches=['roborts_sim multi_robot.launch gui=false']):
+		"""Enter launches as list of strings for each command with no spaces between variables and equal sign."""
+		if rosFromPython.__instantiated:
+			raise Exception("ROS start up should only be run once")
+		self.__instantiated = True
+
+		uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+		roslaunch.configure_logging(uuid)
+		processed_launches = []
+		for launch in launches:
+			if not launch.find(":=") and launch.find("="):
+				launch.replace("=",":=")
+			cli_args = launch.split(sep=" ")
+			roslaunch_file = roslaunch.rlutil.resolve_launch_arguments(cli_args)[0]
+			roslaunch_args = cli_args[2:]
+			processed_launches += [(roslaunch_file,roslaunch_args)]
+		self.launch = roslaunch.parent.ROSLaunchParent(uuid, processed_launches, is_core=True)
+		self.launch.start()
+
+	def shutdown(self):
+		self.launch.shutdown()
+		

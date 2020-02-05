@@ -300,7 +300,7 @@ class RobomasterEnv(gym.Env):
         # barrel heat: 1
         # robot hp: 1
 
-        if not self._odom_info[0]:
+        if not all(self._odom_info[0]):
             return [None], [None]
         robot_state = [self._odom_info[i][:] + [self._num_projectiles[i], self._barrel_heat[i], self._robot_hp[i]]
                        for i in range(4)]
@@ -332,6 +332,9 @@ class RobomasterEnv(gym.Env):
 
 
 if __name__ == '__main__':
+    # This section runs roslaunch from script.
+    ros_from_python = rosFromPython()
+
     env = RobomasterEnv(True)._start_rospy()
     test_waypoints = [(1, 1), (1, 4), (7, 1), (7, 4)]
     dummy_strategy = lambda i: test_waypoints[i]
@@ -341,3 +344,5 @@ if __name__ == '__main__':
         time.sleep(0.01)
         if done:
             env.reset()
+
+    ros_from_python.shutdown()
