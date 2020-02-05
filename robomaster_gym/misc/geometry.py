@@ -161,6 +161,8 @@ def simplify_angle(angle):
         return math.pi / 2 - angle
     return angle
 
+
+# Tests
 if __name__ == "__main__":
     print(orientation(1,1, 2,1, 1,2)) # -1
     print(orientation(1,1, 1,0, 2,1)) # 1

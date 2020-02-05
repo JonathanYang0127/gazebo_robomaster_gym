@@ -21,6 +21,9 @@ class CriticalPointNavigator(Navigator):
         self.G = nx.Graph()
         self.points = []
 
+    def cost_heuristic(self, pt1, pt2):
+        return self.straight_sprint_cost(pt1, pt2)
+
     def cost(self, pt1, pt2):
         pass
         # return self.straight_sprint_cost(pt1, pt2)
