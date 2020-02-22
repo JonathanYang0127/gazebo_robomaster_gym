@@ -190,13 +190,13 @@ class RobomasterEnv(gym.Env):
             if x >= left + edge_buffer and x <= right - edge_buffer and y >= bottom + edge_buffer and y <= top - edge_buffer:
                 return i
 
-    def waypoint_to_cmd(self, robot_index, waypoint):
-        cmd = self.navigator.navigate(robot_index, waypoint)
-        if cmd:
-            return cmd
-        if robot_index == 0:
-            return [0, 1, 0, 0]
-        return [0, 0, -1, 0]
+    def waypoint_to_cmd(self, robot_index, waypoint_index):
+        if waypoint_index:
+            waypoint = self.navigator.get_point(waypoint_index)
+            cmd = self.navigator.navigate(robot_index, waypoint)
+            return cmd if cmd else no_op
+        else:
+            return [0, 0, -1, 0]
 
     def apply_heal(self, is_team_01):
         index1, index2 = (0, 1) if is_team_01 else (2, 3)
@@ -335,13 +335,13 @@ class RobomasterEnv(gym.Env):
 if __name__ == '__main__':
     run_ros = True
     if len(sys.argv) > 1:
-        run_ros = sys.argv[1] == 'no_ros=True'
+        run_ros = not sys.argv[1] == 'no_ros=True'
     # This section runs roslaunch from script.
     if run_ros:
         ros_from_python = rosFromPython()
 
     env = RobomasterEnv(True)._start_rospy()
-    test_waypoints = [(1, 1), (1, 4), (7, 1), (7, 4)]
+    test_waypoints = [14, None, None, None]
     dummy_strategy = lambda i: test_waypoints[i]
     for i in range(1000):
         test_cmds = [env.waypoint_to_cmd(i, dummy_strategy(i)) for i in range(4)]
