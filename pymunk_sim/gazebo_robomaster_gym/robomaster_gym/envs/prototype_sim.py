@@ -17,12 +17,18 @@ from robomaster_env import RobomasterEnv
 from robomaster_gym.misc import *
 
 RATIO = .10
-SCREEN = (int(8100*RATIO), int(5100*RATIO))
+SCREEN = (int(8080*RATIO), int(4480*RATIO))
 MAX_VEL = 200
 
 class PymunkEnv(RobomasterEnv):
-    def __init__(self, dt):
+    def __init__(self, dt, do_render=False):
         super().__init__()
+
+        self.do_render = do_render
+        if self.do_render:
+            pygame.init()
+            self.screen = pygame.display.set_mode(SCREEN) 
+            self.draw_options = pymunk.pygame_util.DrawOptions(self.screen)
         
         self._dt = dt
         space = pymunk.Space()
@@ -56,15 +62,19 @@ class PymunkEnv(RobomasterEnv):
             vertices = [(int(s[0]*1000*RATIO), int(s[1]*1000*RATIO)) for s in self.segments[i:i+4]]
             shape = pymunk.Poly(static_body, vertices)
             shape.friction = 10
-            shape.color = (0,255,255,255)
+            shape.color = (255,255,255,0)
             space.add(shape)
 
+        zone_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
+        space.add(zone_body)
+    
+
         generate_tank = PymunkEnv.generate_tank
-        self._tank_bodies = [generate_tank(space,(500,500),0), generate_tank(space,(500,4600),0), generate_tank(space,(7600,500),pi), generate_tank(space,(7600,4600),pi)]
+        self._tank_bodies = [generate_tank(space,0,(500,500),0), generate_tank(space,1,(500,3980),0), generate_tank(space,2,(7580,500),pi), generate_tank(space,3,(7580,3980),pi)]
         self.space = space
         self._robot_coords = [self.get_coords(i) for i in range(4)]
         self._robot_plates_coords = [self.get_armor(i) for i in range(4)]
-        self._odom_info = [(500*RATIO,500*RATIO,0), (500*RATIO,4600*RATIO,0), (7600*RATIO,500*RATIO,pi), (7600*RATIO,4600*RATIO,pi)]
+        self._odom_info = [(500*RATIO,500*RATIO,0), (500*RATIO,3980*RATIO,0), (7580*RATIO,500*RATIO,pi), (7580*RATIO,3980*RATIO,pi)]
         self._gimbal_angle = [0,0,0,0]
 
     def pub_cmds(self, _id, action, gimbal):
@@ -76,8 +86,7 @@ class PymunkEnv(RobomasterEnv):
         angle = action[2]
 
         if vel.length > 100:
-            if abs(tank_body.angle-vel.angle)%pi < .7*pi:
-                print("called")
+            if abs(tank_body.angle-vel.angle)%pi < pi:
                 tank_control_body.angle = vel.angle
                 active_rotation_vector = tank_body.rotation_vector
             else:
@@ -141,15 +150,15 @@ class PymunkEnv(RobomasterEnv):
                 if lines_cross(*plate,*(*line_of_sight,*pos.int_tuple)):
                     line_of_sight = seg_intersect(*plate,*(*line_of_sight,*pos.int_tuple))
                     hit_robot = (i,j)
-                    print("robot hit")
 
         return hit_robot if hit_robot else (-1,-1)
 
 
-    def generate_tank(space, center, angle):
+    def generate_tank(space, _id, center, angle):
         # We joint the tank to the control body and control the tank indirectly by modifying the control body.
         tank_control_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
         tank_control_body.position = 320,480
+        tank_control_body.angle = angle
         space.add(tank_control_body)
 
         tank_body = pymunk.Body()
@@ -159,10 +168,12 @@ class PymunkEnv(RobomasterEnv):
         turret = pymunk.Circle(tank_body, 100*RATIO, (50*RATIO,0))
         tank.mass = 1
         tank.friction = 10
-        tank.color = (0,255,100,255)
-        turret.color = (0,100,100,100)
+        tank.color = (25,25,112,0) if _id <= 1 else (128,0,0,0)
+        turret.color = (190,190,190,0)
+        turret.angle = angle
         space.add(tank)
         space.add(turret)
+        tank.angle = angle
 
         pivot = pymunk.PivotJoint(tank_control_body, tank_body, (0,0), (0,0))
         space.add(pivot)
@@ -179,9 +190,23 @@ class PymunkEnv(RobomasterEnv):
         space.add(pivot1)
         pivot1.max_bias = 0 # disable joint correction
 
-        return (tank_body, tank_control_body)       
+        return (tank_body, tank_control_body)   
 
-def KeyboardAgent(surface,env):
+    def render(self):
+        if not self.do_render:
+            return
+        self.screen.fill(pygame.color.THECOLORS["black"])
+        for i, zone in enumerate(zones):
+            shape = pygame.Rect((zone[0]*1000*RATIO,zone[2]*1000*RATIO),(540*RATIO,480*RATIO))
+            color =  (30,144,255,0) if abs(self._zone_types[i]) >= 2 else (205,92,92,0)
+            pygame.draw.rect(self.screen,color,shape)
+
+        env.space.debug_draw(self.draw_options)
+
+        pygame.display.flip()    
+
+def KeyboardAgent(env):
+    surface = env.screen
     key_dir = Vec2d(0,0) # key_dir exact length does not matter
     pressed = pygame.key.get_pressed()
     if pressed[pygame.K_a]:
@@ -204,20 +229,16 @@ def KeyboardAgent(surface,env):
 
 if __name__ == '__main__':
     fps = 60.0
-    env = PymunkEnv(1/fps)
-    pygame.init()
-    screen = pygame.display.set_mode(SCREEN) 
+    env = PymunkEnv(1/fps,do_render=True)
     clock = pygame.time.Clock()
-    draw_options = pymunk.pygame_util.DrawOptions(screen)
 
     while True:
         for event in pygame.event.get():
             if event.type == QUIT or pygame.key.get_pressed()[K_ESCAPE]: 
                 exit()
         
-        screen.fill(pygame.color.THECOLORS["black"])
-        env.space.debug_draw(draw_options)
-        env.step(KeyboardAgent(screen,env))
-        pygame.display.flip()
+        env.step(KeyboardAgent(env))
+        env.render()
+        
         
         clock.tick(fps)
