@@ -69,11 +69,13 @@ def plate_coords_from_odom(odom_info):
 # ZONE AND OBSTACLE #
 #####################
 
-def generate_obstacle_segments(buffer):
+def generate_obstacle_segments(buffer, add_diag=False):
     segments = []
     for xl, xr, yb, yt in parallel_obstacles:
         xl, xr, yb, yt = xl - buffer, xr + buffer, yb - buffer, yt + buffer
         segments.extend([(xl, yb, xl, yt), (xl, yb, xr, yb), (xr, yt, xr, yb), (xr, yt, xl, yt)])
+        if add_diag:
+            segments.extend([(xl, yb, xr, yt), (xl, yt, xr, yb)])
     left, hmid, right, bot, vmid, top = center_obstacle
     left, right, top, bot = left - buffer, right + buffer, top + buffer, bot - buffer
     
@@ -123,6 +125,11 @@ def lines_cross(x1, y1, x2, y2, x3, y3, x4, y4):
 
 def distance(x1=0, y1=0, x2=0, y2=0):
     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+def distance_tuple(pt1, pt2):
+    x1, y1 = pt1
+    x2, y2 = pt2
+    return distance(x1, y1, x2, y2)
 
 def angleTo(x1, y1, x2, y2):
     """

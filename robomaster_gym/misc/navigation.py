@@ -1,4 +1,5 @@
 from .geometry import *
+from .utils import *
 import networkx as nx
 
 no_op = [0, 0, 0, 0]
@@ -34,10 +35,14 @@ class CriticalPointNavigator(Navigator):
         self.edges = left_edges + right_edges + cross_edges
         self.edges = [(i, j, { 'weight': self.neighbor_cost(self.nodes[i], self.nodes[j]) }) for i, j in self.edges]
 
-        self.G.add_nodes_from(self.nodes[1:])
+        self.G.add_nodes_from(range(self.N))
         self.G.add_edges_from(self.edges)
 
         self.mover = DummyMover()
+        self.prev_goal, self.prev_path = None, None
+
+    def get_point_at_zone(self, index):
+        return [10, 8, 2, 11, 13, 19][index]
 
     def cost_heuristic(self, pt1, pt2):
         return self.neighbor_cost(pt1, pt2)
@@ -46,7 +51,7 @@ class CriticalPointNavigator(Navigator):
         pass
 
     def neighbor_cost(self, pt1, pt2):
-        return distance(*pt1, *pt2)
+        return distance_tuple(pt1, pt2)
 
     def get_path(self, pt1, pt2):
         pass
@@ -59,42 +64,50 @@ class CriticalPointNavigator(Navigator):
         if not all(self.env._odom_info):
             return
         x, y, yaw = self.env._odom_info[robot_index]
+        src = (x, y)
         pt = (round(x, 3), round(y, 3))
 
-        src_pt_ind, min_distance = None, float('inf')
-        for _src_ind, _src in enumerate(self.nodes):
-            node_x, node_y = _src
-            _dis = distance(x, y, node_x, node_y)
-            if _dis < min_distance:
-                src_pt_ind, min_distance = _src_ind, _dis
-                if _dis < self.proximity_threshold:
-                    break
+        if self.prev_goal and chance(0.98) and distance_tuple(dest, self.prev_goal) < self.proximity_threshold:
+            path = self.prev_path
+            if path:
+                if distance_tuple(src, self.nodes[path[0]]) < self.proximity_threshold:
+                    path = path[1:]
+        else:
+            src_pt_ind, min_distance = None, float('inf')
+            for _src_ind, _src in enumerate(self.nodes):
+                _dis = distance_tuple(src, _src)
+                if _dis < min_distance:
+                    src_pt_ind, min_distance = _src_ind, _dis
+                    if _dis < self.proximity_threshold:
+                        break
 
-        d_x, d_y = dest
-        dst_pt_ind, min_distance = None, float('inf')
-        for _dst_ind, _dst in enumerate(self.nodes):
-            node_x, node_y = _dst
-            _dis = distance(d_x, d_y, node_x, node_y)
-            if _dis < min_distance:
-                dst_pt_ind, min_distance = _dst_ind, _dis
-                if _dis < self.proximity_threshold:
-                    break
+            dst_pt_ind, min_distance = None, float('inf')
+            for _dst_ind, _dst in enumerate(self.nodes):
+                node_x, node_y = _dst
+                _dis = distance_tuple(dest, _dst)
+                if _dis < min_distance:
+                    dst_pt_ind, min_distance = _dst_ind, _dis
+                    if _dis < self.proximity_threshold:
+                        break
 
-        if src_pt_ind == dst_pt_ind:
-            return self.mover.move_to(pt, dest)
+            if src_pt_ind == dst_pt_ind:
+                return self.mover.move_to(pt, dest)
 
-        path = nx.shortest_path(self.G, src_pt_ind, dst_pt_ind)
-        index = 0
-        while index < len(path):
-            to_x, to_y = self.nodes[path[index]]
-            if self.env.is_line_of_sight_blocked(x, y, to_x, to_y, robot_index):
+            path = nx.shortest_path(self.G, src_pt_ind, dst_pt_ind, weight='weight')
+            if self.prev_path and (path[1:] == self.prev_path):
+                path = self.prev_path
+        while len(path) >= 2:
+            to_x, to_y = self.nodes[path[1]]
+            if self.env.is_line_of_sight_blocked(x, y, to_x, to_y, robot_index, segment_type='move'):
                 break
-            index += 1
+            print('PATH TO {0} IS GOOD!'.format(path[1]))
+            path = path[1:]
+        print(path)
 
-        if index == len(path):
-            index = -1
-        print(index)
-        return self.mover.move_to(pt, self.nodes[path[index]])
+        self.prev_goal, self.prev_path = dest, path
+        if path:
+            return self.mover.move_to(pt, self.nodes[path[0]])
+
 
 class Mover:
 
