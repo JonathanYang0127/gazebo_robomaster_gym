@@ -108,11 +108,26 @@ class CriticalPointNavigator(Navigator):
         if path:
             return self.mover.move_to(self.env._odom_info[robot_index], self.nodes[path[0]])
 
-# class CriticalPointNavigatorWithRotation(CriticalPointNavigator):
+class CriticalPointNavigatorWithRotation(CriticalPointNavigator):
 
-#     def navigate(self, robot_index, dest):
-#         if self.env._timestep % 15 == 0:
-#             # return self.mover.turn_to_angle(self,)
+    def __init__(self, env):
+        super().__init__(env)
+
+    def navigate(self, robot_index, dest):
+        if not all(self.env._odom_info):
+            return
+        for enemy_index in self.env.get_enemy_team(robot_index):
+            aimed_plate = self.env.best_plates[enemy_index]
+            if aimed_plate:
+                aimed_index = self.env.best_plates[enemy_index][0]
+                if aimed_index == robot_index:
+
+                    enemy_x, enemy_y, _ = self.env._odom_info[enemy_index]
+                    x, y, yaw = self.env._odom_info[robot_index]
+                    if angleDiff(angleTo(x, y, enemy_x, enemy_y), yaw) > math.pi / 10:
+                        return self.mover.turn_to_angle(yaw, angleTo(x, y, enemy_x, enemy_y))
+                    break
+        return super().navigate(robot_index, dest)
 
 class Mover:
 
