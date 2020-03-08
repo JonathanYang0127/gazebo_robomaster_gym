@@ -26,22 +26,28 @@ class RobomasterEnv(gym.Env):
 
         self.robot_coords = [None] * 4
         self.robot_plates_coords = [None] * 4
+        self.best_plates = [None] * 4
 
         # Amount of time running per timestep
         self._running_step = 0.1
 
         # Max number of timesteps
         self._timestep = 0
-        self._max_timesteps = 1000
+        self._max_timesteps = 1800
 
         # Conversion from timestep to real time
         self._real_time_conversion = 1
 
         # initialize segments of each obstacle for blocking calculation
         # buffer is added
-        self.obstacle_buffer = 0.015
-        self.segments = generate_obstacle_segments(self.obstacle_buffer)
-        self.navigator = CriticalPointNavigator(self)
+        self.shoot_obstacle_buffer = 0.015
+        self.move_obstacle_buffer = robot_diag_length
+
+        # SHOOT_SEGMENTS are near ground-truth
+        # MOVE_SEGMENTS are helper for navigation purposes
+        self.shoot_segments = generate_obstacle_segments(self.shoot_obstacle_buffer)
+        self.move_segments = generate_obstacle_segments(self.move_obstacle_buffer, add_diag=True)
+        self.navigator = CriticalPointNavigatorWithRotation(self)
 
         self.on_init()
 
@@ -59,7 +65,6 @@ class RobomasterEnv(gym.Env):
         self._num_projectiles = [50, 0, 50, 0]
         self._barrel_heat = [0] * 4
         self.spawn_buff_zones()
-        # self._zone_types = [-1] * 6
 
         self.move_disable = [0, 0, 0, 0]
         self.shoot_disable = [0, 0, 0, 0]
@@ -67,7 +72,7 @@ class RobomasterEnv(gym.Env):
     
     def _setup_pygame(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((1500, 400), pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode((1500, 450), pygame.RESIZABLE)
         if self._statistics_gui:
             self.screen.fill(pygame.Color('Black'))
             self.font = pygame.font.SysFont('monospace', 40)
@@ -78,6 +83,7 @@ class RobomasterEnv(gym.Env):
 
     def update_statistics(self, statistics):
         text = ''
+        text += 'Time: {}\n'.format(self._timestep)
         text += '{:15s} {:15s} {:15s} {:15s}\n'.format('Robot 0', 'Robot 1', 'Robot 2', 'Robot 3')
         for key, values in statistics.items():
             for v in values:
@@ -122,7 +128,7 @@ class RobomasterEnv(gym.Env):
 
     # return whether the line (x1, y1) - (x2, y2) is blocked by anything
     # pass in from_robot_index so it doesn't check for the robot itself!
-    def is_line_of_sight_blocked(self, x1, y1, x2, y2, from_robot_index=None):
+    def is_line_of_sight_blocked(self, x1, y1, x2, y2, from_robot_index=None, segment_type='shoot'):
         # uninitiated
         if not self.robot_coords:
             return True
@@ -131,7 +137,8 @@ class RobomasterEnv(gym.Env):
                 _x1, _y1, _x2, _y2, _x3, _y3, _x4, _y4 = self.robot_coords[robot_index]
                 if lines_cross(x1, y1, x2, y2, _x1, _y1, _x3, _y3) or lines_cross(x1, y1, x2, y2, _x2, _y2, _x4, _y4):
                     return True
-        for xl, yl, xh, yh in self.segments:
+        segments = self.shoot_segments if segment_type == 'shoot' else self.move_segments
+        for xl, yl, xh, yh in segments:
             if lines_cross(x1, y1, x2, y2, xl, yl, xh, yh):
                 return True
         return False
@@ -139,7 +146,10 @@ class RobomasterEnv(gym.Env):
     # TODO: determine by experiment
     # should also return optimal shoot velocity
     def expected_damage_with_optimal_shoot_vel(self, damage, angle, distance):
-        return math.sin(angle) * damage, damage
+        return self.estimate_plate_visible_size(angle, distance) * damage, 20
+
+    def estimate_plate_visible_size(self, angle, distance):
+        return math.sin(angle) / (distance / gimbal_range_dis) ** 2
 
     # return the index and optimal shoot velocity of best enemy plate visible
     # None if no index is visible
@@ -157,12 +167,38 @@ class RobomasterEnv(gym.Env):
                 dis = distance(x, y, center_x, center_y)
                 angle_diff = angleDiff(angleTo(x, y, center_x, center_y), yaw)
                 if dis < gimbal_range_dis and angle_diff <= gimbal_range_angle:
-                    exp_damage, vel = self.expected_damage_with_optimal_shoot_vel(armor_plate_damage[plate_index], angle_diff,
+                    shoot_angle = angleDiff(angleTo(x, y, center_x, center_y), angleTo(x1, y1, x2, y2))
+                    exp_damage, vel = self.expected_damage_with_optimal_shoot_vel(armor_plate_damage[plate_index], shoot_angle,
                                                                                   dis)
                     if exp_damage > damage:
                         if not self.is_line_of_sight_blocked(x, y, center_x, center_y, robot_index):
-                            best_plate = (enemy, plate_index, vel)
+                            best_plate = (enemy, plate_index, exp_damage, vel)
                             damage = exp_damage
+        return best_plate
+
+    def get_largest_enemy_plate(self, robot_index):
+        if not all(self._odom_info):
+            return
+        x, y, yaw = self._odom_info[robot_index]
+        best_plate = None
+        max_size = 0
+        for enemy in self.get_enemy_team(robot_index):
+            if self._robot_hp[enemy] <= 0:
+                continue
+            for plate_index in range(4):
+                x1, y1, x2, y2 = self.robot_plates_coords[enemy][plate_index]
+                center_x, center_y = midpoint(x1, y1, x2, y2)
+                dis = distance(x, y, center_x, center_y)
+                angle_diff = angleDiff(angleTo(x, y, center_x, center_y), yaw)
+                if dis < gimbal_range_dis and angle_diff <= gimbal_range_angle:
+                    shoot_angle = angleDiff(angleTo(x, y, center_x, center_y), angleTo(x1, y1, x2, y2))
+                    _size = self.estimate_plate_visible_size(shoot_angle, dis)
+                    exp_damage, vel = self.expected_damage_with_optimal_shoot_vel(armor_plate_damage[plate_index], shoot_angle,
+                                                                                  dis)
+                    if exp_damage > self.damage_threshold and _size > max_size:
+                        if not self.is_line_of_sight_blocked(x, y, center_x, center_y, robot_index):
+                            best_plate = (enemy, plate_index, exp_damage, vel)
+                            max_size = _size
         return best_plate
 
     def odometry_callback(self, msg):
@@ -190,13 +226,20 @@ class RobomasterEnv(gym.Env):
             if x >= left + edge_buffer and x <= right - edge_buffer and y >= bottom + edge_buffer and y <= top - edge_buffer:
                 return i
 
-    def waypoint_to_cmd(self, robot_index, waypoint):
-        cmd = self.navigator.navigate(robot_index, waypoint)
-        if cmd:
-            return cmd
-        if robot_index == 0:
-            return [0, 1, 0, 0]
-        return [0, 0, -1, 0]
+    def waypoint_to_cmd(self, robot_index, waypoint_index):
+        cmd = None
+        if self._timestep % 2 == 0:
+            self.best_plates[robot_index] = self.get_largest_enemy_plate(robot_index) if self._robot_hp[robot_index] > 0 else None
+        if waypoint_index:
+            waypoint = self.navigator.get_point(waypoint_index)
+            cmd = self.navigator.navigate(robot_index, waypoint)
+        else:
+            cmd = [0, 0, -1, 0]
+        if not cmd:
+            return [0, 0, -1, 0]
+        shoot_flag = 0
+        cmd[-1] = shoot_flag
+        return cmd
 
     def apply_heal(self, is_team_01):
         index1, index2 = (0, 1) if is_team_01 else (2, 3)
@@ -220,9 +263,15 @@ class RobomasterEnv(gym.Env):
             print("Invalid action!")
             return None, None, None, {}
 
+        for robot_index in range(4):
+            if self._robot_hp[robot_index] <= 0:
+                actions[robot_index] = no_op
+
         #Check for/update debuffs to robots if in zone
         for robot_index in range(4):
             if self._odom_info[robot_index] is not None:
+                if self._robot_hp[robot_index] <= 0:
+                    continue
                 zone_index = self._check_in_zone(robot_index, self._odom_info[robot_index])
                 if zone_index is None or not self._zones_active[zone_index]:
                     continue
@@ -238,7 +287,7 @@ class RobomasterEnv(gym.Env):
                 else:
                     self.shoot_disable[robot_index] = 10
 
-        #Apply buffs/debuffs
+        #Apply debuffs
         for robot_index, _time in enumerate(self.move_disable):
             if _time > 0:
                 actions[robot_index] = no_op
@@ -249,7 +298,18 @@ class RobomasterEnv(gym.Env):
                 actions[robot_index][3] = 0
                 self.shoot_disable[robot_index] = round(self.shoot_disable[robot_index] - self._running_step, 1)
 
-        best_plates = [self.get_best_enemy_plate(i) for i in range(4)]
+        best_plates = [self.best_plates[i] if self.best_plates[i] or self._robot_hp[i] <= 0 else self.get_largest_enemy_plate(i) for i in range(4)]
+
+        for robot_index, entry in enumerate(best_plates):
+            if not entry or self._num_projectiles[robot_index] <= 0 or self._robot_hp[robot_index] <= 0:
+                continue
+            enemy, plate_index, exp_damage, vel = entry
+            self._num_projectiles[robot_index] -= 1
+            dmg = armor_plate_damage[plate_index]
+            p = exp_damage / (dmg * 1.0)
+            if chance(p):
+                print('DAMAGE dealt! {}'.format(dmg))
+                self._robot_hp[enemy] -= dmg
 
         for i in range(4):
             self.cmd_vel[i].twist.linear.x, self.cmd_vel[i].twist.linear.y, self.cmd_vel[i].twist.angular.z, self._shoot[i] = actions[i]
@@ -273,7 +333,8 @@ class RobomasterEnv(gym.Env):
             self.update_statistics({'HP': self._robot_hp,
                                     'MD': self.move_disable,
                                     'SD': self.shoot_disable,
-                                    'CE': [None if k is None else k[0] for k in best_plates]})
+                                    'CE': [None if k is None else (k[0], k[1]) for k in best_plates],
+                                    'BL': self._num_projectiles})
         return state, reward, done, {}
 
     def reset(self):
@@ -331,24 +392,37 @@ class RobomasterEnv(gym.Env):
             range(4)]
         return self
 
-
 if __name__ == '__main__':
     run_ros = True
     if len(sys.argv) > 1:
-        run_ros = sys.argv[1] == 'no_ros=True'
+        run_ros = not sys.argv[1] == 'no_ros=True'
     # This section runs roslaunch from script.
-    # ros_from_python = rosFromPython()
-    print(run_ros)
-    return
+    if run_ros:
+        ros_from_python = rosFromPython()
 
     env = RobomasterEnv(True)._start_rospy()
-    test_waypoints = [(1, 1), (1, 4), (7, 1), (7, 4)]
-    dummy_strategy = lambda i: test_waypoints[i]
-    for i in range(1000):
-        test_cmds = [env.waypoint_to_cmd(i, dummy_strategy(i)) for i in range(4)]
+    patrol_strat = PatrolStrategy([6, 7, 15, 14])
+    get_buff_strat = GetBuffStrategy()
+
+    def dummy_strategy(robot_index):
+        if robot_index == 0:
+            return patrol_strat.pick(env, robot_index)
+        if robot_index == 1:
+            return get_buff_strat.pick(env, robot_index)
+    for _ in range(1800):
+        env._timestep += 1
+        if env._timestep % 600 == 0:
+            env.spawn_buff_zones()
+        for team in [(0, 1), (2, 3)]:
+            index1, index2 = team
+            if env._robot_hp[index1] <= 0 and env._robot_hp[index2] <= 0:
+                print('GAME OVER! Team {} died.'.format({team}))
+                exit()
+        test_cmds = [env.waypoint_to_cmd(j, dummy_strategy(j)) for j in range(4)]
         state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)
         if done:
             env.reset()
 
-    # ros_from_python.shutdown()
+    if run_ros:
+        ros_from_python.shutdown()

@@ -17,7 +17,7 @@ gimbal_range_deg = 82.5
 gimbal_range_angle = gimbal_range_deg / 180 * math.pi
 
 # TODO: determine by experiment
-gimbal_range_dis = float('inf')
+gimbal_range_dis = 3.000
 
 robot_max_hp = 2000
 max_launch_velocity = 25
