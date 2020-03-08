@@ -142,7 +142,7 @@ class RobomasterEnv(gym.Env):
     # TODO: determine by experiment
     # should also return optimal shoot velocity
     def expected_damage_with_optimal_shoot_vel(self, damage, angle, distance):
-        return math.sin(angle) * damage, damage
+        return math.sin(angle) * damage, 20
 
     # return the index and optimal shoot velocity of best enemy plate visible
     # None if no index is visible
@@ -276,7 +276,7 @@ class RobomasterEnv(gym.Env):
             self.update_statistics({'HP': self._robot_hp,
                                     'MD': self.move_disable,
                                     'SD': self.shoot_disable,
-                                    'CE': [None if k is None else k[0] for k in best_plates]})
+                                    'CE': [None if k is None else (k[0], k[1]) for k in best_plates]})
         return state, reward, done, {}
 
     def reset(self):
@@ -344,10 +344,10 @@ if __name__ == '__main__':
         ros_from_python = rosFromPython()
 
     env = RobomasterEnv(True)._start_rospy()
-    test_waypoints = [14, None, None, None]
-    dummy_strategy = lambda i: test_waypoints[i] if not test_waypoints[i] or chance(0.1) else 9
+    patrol_strat = PatrolStrategy([6, 7, 15, 14])
+    dummy_strategy = lambda i: patrol_strat.pick(env, i) if i == 0 else None
     for i in range(1000):
-        test_cmds = [env.waypoint_to_cmd(i, dummy_strategy(i)) for i in range(4)]
+        test_cmds = [env.waypoint_to_cmd(j, dummy_strategy(j)) for j in range(4)]
         state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)
         if done:
