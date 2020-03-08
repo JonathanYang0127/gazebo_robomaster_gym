@@ -39,7 +39,7 @@ class CriticalPointNavigator(Navigator):
         self.G.add_edges_from(self.edges)
 
         self.mover = DummyMover()
-        self.prev_goal, self.prev_path = None, None
+        self.prev_goal, self.prev_path = [None] * 4, [None] * 4
 
     def get_point_at_zone(self, index):
         return [10, 8, 2, 11, 13, 19][index]
@@ -67,8 +67,8 @@ class CriticalPointNavigator(Navigator):
         src = (x, y)
         pt = (round(x, 3), round(y, 3))
 
-        if self.prev_goal and chance(0.98) and distance_tuple(dest, self.prev_goal) < self.proximity_threshold:
-            path = self.prev_path
+        if self.prev_goal[robot_index] and chance(0.98) and distance_tuple(dest, self.prev_goal[robot_index]) < self.proximity_threshold:
+            path = self.prev_path[robot_index]
             if path:
                 if distance_tuple(src, self.nodes[path[0]]) < self.proximity_threshold:
                     path = path[1:]
@@ -91,11 +91,11 @@ class CriticalPointNavigator(Navigator):
                         break
 
             if src_pt_ind == dst_pt_ind:
-                return self.mover.move_to(pt, dest)
+                return self.mover.move_to(self.env._odom_info[robot_index], dest)
 
             path = nx.shortest_path(self.G, src_pt_ind, dst_pt_ind, weight='weight')
-            if self.prev_path and (path[1:] == self.prev_path):
-                path = self.prev_path
+            if self.prev_path[robot_index] and (path[1:] == self.prev_path[robot_index]):
+                path = self.prev_path[robot_index]
         while len(path) >= 2:
             to_x, to_y = self.nodes[path[1]]
             if self.env.is_line_of_sight_blocked(x, y, to_x, to_y, robot_index, segment_type='move'):
@@ -104,10 +104,15 @@ class CriticalPointNavigator(Navigator):
             path = path[1:]
         print(path)
 
-        self.prev_goal, self.prev_path = dest, path
+        self.prev_goal[robot_index], self.prev_path[robot_index] = dest, path
         if path:
-            return self.mover.move_to(pt, self.nodes[path[0]])
+            return self.mover.move_to(self.env._odom_info[robot_index], self.nodes[path[0]])
 
+# class CriticalPointNavigatorWithRotation(CriticalPointNavigator):
+
+#     def navigate(self, robot_index, dest):
+#         if self.env._timestep % 15 == 0:
+#             # return self.mover.turn_to_angle(self,)
 
 class Mover:
 
@@ -124,10 +129,10 @@ class DummyMover(Mover):
     cap_speed = robot_max_speed / 2.5
     cap_angular_speed = robot_max_angular_speed / 2.5
 
-    def move_to(self, fr, to):
-        fr_x, fr_y = fr
+    def move_to(self, odom_info, to):
+        fr_x, fr_y, yaw = odom_info
         to_x, to_y = to
-        return self.move_forward(angleTo(fr_x, fr_y, to_x, to_y), self.cap_speed)
+        return self.move_forward(angleTo(fr_x, fr_y, to_x, to_y) - yaw, self.cap_speed)
 
     # [x-vel, y-vel, yaw, shoot_flag]
     def move_forward(self, angle, speed):
