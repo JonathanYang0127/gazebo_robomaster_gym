@@ -26,6 +26,7 @@ class RobomasterEnv(gym.Env):
 
         self.robot_coords = [None] * 4
         self.robot_plates_coords = [None] * 4
+        self.best_plates = [None] * 4
 
         # Amount of time running per timestep
         self._running_step = 0.1
@@ -41,9 +42,12 @@ class RobomasterEnv(gym.Env):
         # buffer is added
         self.shoot_obstacle_buffer = 0.015
         self.move_obstacle_buffer = robot_diag_length
+
+        # SHOOT_SEGMENTS are near ground-truth
+        # MOVE_SEGMENTS are helper for navigation purposes
         self.shoot_segments = generate_obstacle_segments(self.shoot_obstacle_buffer)
         self.move_segments = generate_obstacle_segments(self.move_obstacle_buffer, add_diag=True)
-        self.navigator = CriticalPointNavigator(self)
+        self.navigator = CriticalPointNavigatorWithRotation(self)
 
         self.on_init()
 
@@ -179,6 +183,8 @@ class RobomasterEnv(gym.Env):
         best_plate = None
         max_size = 0
         for enemy in self.get_enemy_team(robot_index):
+            if self._robot_hp[enemy] <= 0:
+                continue
             for plate_index in range(4):
                 x1, y1, x2, y2 = self.robot_plates_coords[enemy][plate_index]
                 center_x, center_y = midpoint(x1, y1, x2, y2)
@@ -222,6 +228,8 @@ class RobomasterEnv(gym.Env):
 
     def waypoint_to_cmd(self, robot_index, waypoint_index):
         cmd = None
+        if self._timestep % 2 == 0:
+            self.best_plates[robot_index] = self.get_largest_enemy_plate(robot_index) if self._robot_hp[robot_index] > 0 else None
         if waypoint_index:
             waypoint = self.navigator.get_point(waypoint_index)
             cmd = self.navigator.navigate(robot_index, waypoint)
@@ -230,8 +238,6 @@ class RobomasterEnv(gym.Env):
         if not cmd:
             return [0, 0, -1, 0]
         shoot_flag = 0
-        if self._timestep % 2 == 0:
-            best_plate = self.get_largest_enemy_plate(robot_index)
         cmd[-1] = shoot_flag
         return cmd
 
@@ -292,7 +298,7 @@ class RobomasterEnv(gym.Env):
                 actions[robot_index][3] = 0
                 self.shoot_disable[robot_index] = round(self.shoot_disable[robot_index] - self._running_step, 1)
 
-        best_plates = [self.get_largest_enemy_plate(i) for i in range(4)]
+        best_plates = [self.best_plates[i] if self.best_plates[i] or self._robot_hp[i] <= 0 else self.get_largest_enemy_plate(i) for i in range(4)]
 
         for robot_index, entry in enumerate(best_plates):
             if not entry or self._num_projectiles[robot_index] <= 0 or self._robot_hp[robot_index] <= 0:
@@ -407,6 +413,11 @@ if __name__ == '__main__':
         env._timestep += 1
         if env._timestep % 600 == 0:
             env.spawn_buff_zones()
+        for team in [(0, 1), (2, 3)]:
+            index1, index2 = team
+            if env._robot_hp[index1] <= 0 and env._robot_hp[index2] <= 0:
+                print('GAME OVER! Team {} died.'.format({team}))
+                exit()
         test_cmds = [env.waypoint_to_cmd(j, dummy_strategy(j)) for j in range(4)]
         state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)

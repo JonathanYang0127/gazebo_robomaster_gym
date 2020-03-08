@@ -2,13 +2,13 @@ import robomaster_gym.misc.geometry as geometry
 import strategies.optimizers.constants as CONSTANTS
 
 class RotationalPlanner:
-    def __init__(self, get_game_state):
+    def __init__(self, env):
         """
         :param get_game_state: a function that returns the state of the game, consists of
                 [friendly_state_1, friendly_state_2, enemy_state_1, enemy_state_2]
                 state = [x, y, yaw, amo, heat, health]
         """
-        self.get_game_state = get_game_state
+        self.env = env
 
     def rotation_penalty(self, robot_id):
         """
