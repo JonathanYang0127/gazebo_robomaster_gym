@@ -39,8 +39,10 @@ class RobomasterEnv(gym.Env):
 
         # initialize segments of each obstacle for blocking calculation
         # buffer is added
-        self.obstacle_buffer = 0.015
-        self.segments = generate_obstacle_segments(self.obstacle_buffer)
+        self.shoot_obstacle_buffer = 0.015
+        self.move_obstacle_buffer = robot_diag_length
+        self.shoot_segments = generate_obstacle_segments(self.shoot_obstacle_buffer)
+        self.move_segments = generate_obstacle_segments(self.move_obstacle_buffer, add_diag=True)
         self.navigator = CriticalPointNavigator(self)
 
         self.on_init()
@@ -122,7 +124,7 @@ class RobomasterEnv(gym.Env):
 
     # return whether the line (x1, y1) - (x2, y2) is blocked by anything
     # pass in from_robot_index so it doesn't check for the robot itself!
-    def is_line_of_sight_blocked(self, x1, y1, x2, y2, from_robot_index=None):
+    def is_line_of_sight_blocked(self, x1, y1, x2, y2, from_robot_index=None, segment_type='shoot'):
         # uninitiated
         if not self.robot_coords:
             return True
@@ -131,7 +133,8 @@ class RobomasterEnv(gym.Env):
                 _x1, _y1, _x2, _y2, _x3, _y3, _x4, _y4 = self.robot_coords[robot_index]
                 if lines_cross(x1, y1, x2, y2, _x1, _y1, _x3, _y3) or lines_cross(x1, y1, x2, y2, _x2, _y2, _x4, _y4):
                     return True
-        for xl, yl, xh, yh in self.segments:
+        segments = self.shoot_segments if segment_type == 'shoot' else self.move_segments
+        for xl, yl, xh, yh in segments:
             if lines_cross(x1, y1, x2, y2, xl, yl, xh, yh):
                 return True
         return False
@@ -342,13 +345,13 @@ if __name__ == '__main__':
 
     env = RobomasterEnv(True)._start_rospy()
     test_waypoints = [14, None, None, None]
-    dummy_strategy = lambda i: test_waypoints[i]
+    dummy_strategy = lambda i: test_waypoints[i] if not test_waypoints[i] or chance(0.1) else 9
     for i in range(1000):
         test_cmds = [env.waypoint_to_cmd(i, dummy_strategy(i)) for i in range(4)]
         state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)
         if done:
             env.reset()
-    
+
     if run_ros:
         ros_from_python.shutdown()
