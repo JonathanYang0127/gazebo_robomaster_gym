@@ -21,7 +21,7 @@ class CriticalPointNavigator(Navigator):
         self.G = nx.Graph()
         self.env = env
         left_nodes = [(0.500, 0.500), (0.500, 1.650), (0.500, 2.790),
-        (1.500, 3.000), (0.500, 3.980), (2.400, 4.000), (3.150, 2.990),
+        (1.500, 3.000), (0.800, 3.980), (2.400, 4.000), (3.150, 2.990),
         (3.150, 1.650), (1.900, 1.650), (2.400, 0.500), (4.040, 0.500)]
         right_nodes = [(field_length - x, field_width - y) for x, y in left_nodes]
         self.nodes = left_nodes + right_nodes[::-1]

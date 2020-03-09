@@ -122,6 +122,9 @@ class RobomasterEnv(gym.Env):
             return (2, 3)
         return (0, 1)
 
+    def get_ally(self, robot_index):
+        return 1 - robot_index if robot_index <= 1 else 5 - robot_index
+
     def update_robot_coords(self, _id):
         self.robot_coords[_id] = robot_coords_from_odom(self._odom_info[_id])
         self.robot_plates_coords[_id] = plate_coords_from_odom(self._odom_info[_id])
@@ -230,9 +233,12 @@ class RobomasterEnv(gym.Env):
         cmd = None
         if self._timestep % 2 == 0:
             self.best_plates[robot_index] = self.get_largest_enemy_plate(robot_index) if self._robot_hp[robot_index] > 0 else None
-        if waypoint_index:
-            waypoint = self.navigator.get_point(waypoint_index)
-            cmd = self.navigator.navigate(robot_index, waypoint)
+        if waypoint_index is not None:
+            if type(waypoint_index) is not tuple:
+                waypoint = self.navigator.get_point(waypoint_index)
+                cmd = self.navigator.navigate(robot_index, waypoint)
+            else:
+                cmd = self.navigator.navigate(robot_index, waypoint_index)
         else:
             cmd = [0, 0, -1, 0]
         if not cmd:
@@ -403,12 +409,14 @@ if __name__ == '__main__':
     env = RobomasterEnv(True)._start_rospy()
     patrol_strat = PatrolStrategy([6, 7, 15, 14])
     get_buff_strat = GetBuffStrategy()
+    team_attack_strat = TeamAttackStrategy()
 
     def dummy_strategy(robot_index):
         if robot_index == 0:
             return patrol_strat.pick(env, robot_index)
         if robot_index == 1:
             return get_buff_strat.pick(env, robot_index)
+
     for _ in range(1800):
         env._timestep += 1
         if env._timestep % 600 == 0:
@@ -418,7 +426,7 @@ if __name__ == '__main__':
             if env._robot_hp[index1] <= 0 and env._robot_hp[index2] <= 0:
                 print('GAME OVER! Team {} died.'.format({team}))
                 exit()
-        test_cmds = [env.waypoint_to_cmd(j, dummy_strategy(j)) for j in range(4)]
+        test_cmds = [env.waypoint_to_cmd(j, dummy_strategy(j)) for j in range(2)] + [env.waypoint_to_cmd(j + 2, team_attack_strat.pick(env, 2, 3)[j]) for j in range(2)]
         state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)
         if done:
