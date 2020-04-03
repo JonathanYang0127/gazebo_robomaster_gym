@@ -70,66 +70,70 @@ class CriticalPointNavigator(Navigator):
         src = (x, y)
         pt = (round(x, 3), round(y, 3))
 
-        if self.prev_goal[robot_index] and chance(0.98) and distance_tuple(dest, self.prev_goal[robot_index]) < self.proximity_threshold:
-            path = self.prev_path[robot_index]
-            if path:
-                if distance_tuple(src, self.nodes[path[0]]) < self.proximity_threshold:
-                    path = path[1:]
+        src_pt_ind, min_distance = None, float('inf')
+        for _src_ind, _src in enumerate(self.nodes):
+            _dis = distance_tuple(src, _src)
+            if _dis < min_distance:
+                src_pt_ind, min_distance = _src_ind, _dis
+                if _dis < self.proximity_threshold:
+                    break
+
+        dst_pt_ind, min_distance = None, float('inf')
+        for _dst_ind, _dst in enumerate(self.nodes):
+            node_x, node_y = _dst
+            _dis = distance_tuple(dest, _dst)
+            if _dis < min_distance:
+                dst_pt_ind, min_distance = _dst_ind, _dis
+                if _dis < self.proximity_threshold:
+                    break
+
+        if src_pt_ind == dst_pt_ind:
+            return self.mover.move_to(self.env._odom_info[robot_index], dest)
+
+        if self.prev_path[robot_index] and dst_pt_ind in self.prev_path[robot_index]:
+            path = self.prev_path[robot_index][:self.prev_path[robot_index].index(dst_pt_ind) + 1]
         else:
-            src_pt_ind, min_distance = None, float('inf')
-            for _src_ind, _src in enumerate(self.nodes):
-                _dis = distance_tuple(src, _src)
-                if _dis < min_distance:
-                    src_pt_ind, min_distance = _src_ind, _dis
-                    if _dis < self.proximity_threshold:
-                        break
-
-            dst_pt_ind, min_distance = None, float('inf')
-            for _dst_ind, _dst in enumerate(self.nodes):
-                node_x, node_y = _dst
-                _dis = distance_tuple(dest, _dst)
-                if _dis < min_distance:
-                    dst_pt_ind, min_distance = _dst_ind, _dis
-                    if _dis < self.proximity_threshold:
-                        break
-
-            if src_pt_ind == dst_pt_ind:
-                return self.mover.move_to(self.env._odom_info[robot_index], dest)
-
             path = nx.shortest_path(self.G, src_pt_ind, dst_pt_ind, weight='weight')
-            if self.prev_path[robot_index] and (path[1:] == self.prev_path[robot_index]):
-                path = self.prev_path[robot_index]
+        
+        if distance_tuple(src, self.nodes[path[0]]) < self.proximity_threshold:
+            path = path[1:]
         while len(path) >= 2:
             to_x, to_y = self.nodes[path[1]]
             if self.env.is_line_of_sight_blocked(x, y, to_x, to_y, robot_index, segment_type='move'):
                 break
-            print('PATH TO {0} IS GOOD!'.format(path[1]))
             path = path[1:]
-        print(path)
 
-        self.prev_goal[robot_index], self.prev_path[robot_index] = dest, path
+        self.prev_goal[robot_index], self.prev_path[robot_index] = path[-1], path
         if path:
-            return self.mover.move_to(self.env._odom_info[robot_index], self.nodes[path[0]])
+            dest_x, dest_y = self.nodes[path[0]]
+            blockade = self.env.is_line_of_sight_blocked(x, y, dest_x, dest_y, robot_index, segment_type='move')
+            if not blockade or blockade is True:
+                print(path)
+                return self.mover.move_to(self.env._odom_info[robot_index], self.nodes[path[0]])
 
 class CriticalPointNavigatorWithRotation(CriticalPointNavigator):
 
     def __init__(self, env):
         super().__init__(env)
+        self.to_angle = None
 
     def navigate(self, robot_index, dest):
         if not all(self.env._odom_info):
             return
+        count = 0
+        x, y, yaw = self.env._odom_info[robot_index]
         for enemy_index in self.env.get_enemy_team(robot_index):
             aimed_plate = self.env.best_plates[enemy_index]
-            if aimed_plate:
-                aimed_index = self.env.best_plates[enemy_index][0]
+            if self.env._num_projectiles[enemy_index] and aimed_plate:
+                aimed_index = self. env.best_plates[enemy_index][0]
                 if aimed_index == robot_index:
 
                     enemy_x, enemy_y, _ = self.env._odom_info[enemy_index]
-                    x, y, yaw = self.env._odom_info[robot_index]
                     if angleDiff(angleTo(x, y, enemy_x, enemy_y), yaw) > math.pi / 10:
-                        return self.mover.turn_to_angle(yaw, angleTo(x, y, enemy_x, enemy_y))
-                    break
+                        self.to_angle = angleTo(x, y, enemy_x, enemy_y)
+                        count += 1
+        if count == 1:
+            return self.mover.turn_to_angle(yaw, self.to_angle)
         return super().navigate(robot_index, dest)
 
 class Mover:
@@ -144,8 +148,8 @@ class Mover:
 
 class DummyMover(Mover):
 
-    cap_speed = robot_max_speed / 2.5
-    cap_angular_speed = robot_max_angular_speed / 2.5
+    cap_speed = robot_max_speed / 1.5
+    cap_angular_speed = robot_max_angular_speed / 1.5
 
     def move_to(self, odom_info, to):
         fr_x, fr_y, yaw = odom_info

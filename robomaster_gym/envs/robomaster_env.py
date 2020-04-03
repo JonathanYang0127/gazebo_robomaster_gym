@@ -62,7 +62,7 @@ class RobomasterEnv(gym.Env):
     def on_init(self):
         self._timestep = 0
         self._robot_hp = [robot_max_hp] * 4
-        self._num_projectiles = [50, 0, 50, 0]
+        self._num_projectiles = [0, 50, 0, 50]
         self._barrel_heat = [0] * 4
         self.spawn_buff_zones()
 
@@ -139,7 +139,7 @@ class RobomasterEnv(gym.Env):
             if robot_index != from_robot_index:
                 _x1, _y1, _x2, _y2, _x3, _y3, _x4, _y4 = self.robot_coords[robot_index]
                 if lines_cross(x1, y1, x2, y2, _x1, _y1, _x3, _y3) or lines_cross(x1, y1, x2, y2, _x2, _y2, _x4, _y4):
-                    return True
+                    return robot_index
         segments = self.shoot_segments if segment_type == 'shoot' else self.move_segments
         for xl, yl, xh, yh in segments:
             if lines_cross(x1, y1, x2, y2, xl, yl, xh, yh):
@@ -409,7 +409,9 @@ if __name__ == '__main__':
     env = RobomasterEnv(True)._start_rospy()
     patrol_strat = PatrolStrategy([6, 7, 15, 14])
     get_buff_strat = GetBuffStrategy()
-    team_attack_strat = TeamAttackStrategy()
+    team_attack_strat = StartOfGameGetBulletStrategy()
+    # team_attack_strat = TeamAttackStrategy()
+    # team_attack_strat = StartOfGameWrapper(team_attack_strat)
 
     def dummy_strategy(robot_index):
         if robot_index == 0:
@@ -426,7 +428,8 @@ if __name__ == '__main__':
             if env._robot_hp[index1] <= 0 and env._robot_hp[index2] <= 0:
                 print('GAME OVER! Team {} died.'.format({team}))
                 exit()
-        test_cmds = [env.waypoint_to_cmd(j, dummy_strategy(j)) for j in range(2)] + [env.waypoint_to_cmd(j + 2, team_attack_strat.pick(env, 2, 3)[j]) for j in range(2)]
+        test_cmds = [env.waypoint_to_cmd(j, dummy_strategy(j)) for j in range(2)] + \
+            [env.waypoint_to_cmd(j + 2, team_attack_strat.pick(env, 2, 3)[j]) for j in range(2)]
         state, reward, done, info = env.step(test_cmds)
         time.sleep(0.01)
         if done:

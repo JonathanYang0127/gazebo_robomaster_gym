@@ -74,6 +74,12 @@ def generate_random_zone_config():
     permutation = [-n if chance(0.5) else n for n in permutation]
     return permutation + [-n for n in permutation]
 
+def bullet_refill_zone_rep(robot_index):
+	return 3 if robot_index < 2 else -3
+
+def hp_refill_zone_rep(robot_index):
+	return 2 if robot_index < 2 else -2
+
 class rosFromPython:
 	__instantiated = False
 	def __init__(self, launches=['roborts_sim multi_robot.launch gui=false']):

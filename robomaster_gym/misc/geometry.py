@@ -164,8 +164,8 @@ def simplify_angle(angle):
     avoid large turning (turning more than 180 degrees)
     :param angle: current angle in RAD
     """
-    if angle > math.pi / 2:
-        return math.pi / 2 - angle
+    if angle > math.pi:
+        return math.pi - angle
     return angle
 
 
